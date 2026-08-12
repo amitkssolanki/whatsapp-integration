@@ -26,3 +26,6 @@
 # Ignore key files for decrypting credentials and more.
 /config/*.key
 
+# Personal phone screenshots used for the blog post, not an app asset.
+/app/assets/images/whatsapp-flow-*
+
