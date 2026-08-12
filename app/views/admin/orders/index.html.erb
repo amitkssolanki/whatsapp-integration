@@ -1,0 +1,29 @@
+<% content_for :title, "Admin · Orders" %>
+<%= render "admin/nav" %>
+<div class="wrap">
+  <h1>Orders</h1>
+  <p class="muted">Orders placed via the WhatsApp Cart "Send" action land here.</p>
+
+  <% if @orders.empty? %>
+    <p class="muted">No orders yet — place one from WhatsApp's native cart to see it appear here.</p>
+  <% else %>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Placed</th><th></th></tr>
+      </thead>
+      <tbody>
+        <% @orders.each do |order| %>
+          <tr>
+            <td>#<%= order.id %></td>
+            <td><%= order.customer.display_name.presence || order.customer.whatsapp_number %></td>
+            <td><%= order.order_items.sum(&:quantity) %></td>
+            <td><%= order.formatted_total %></td>
+            <td><%= order.status %></td>
+            <td><%= order.created_at.strftime("%b %-d, %H:%M") %></td>
+            <td><%= link_to "View →", admin_order_path(order) %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% end %>
+</div>

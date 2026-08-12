@@ -1,0 +1,26 @@
+<% content_for :title, "Admin · Menu" %>
+<%= render "admin/nav" %>
+<div class="wrap">
+  <h1>Menu (feeds the WhatsApp Catalog)</h1>
+  <p class="muted">
+    Sanity-check against <code><%= catalog_feed_url %></code> — this is exactly
+    what Meta Commerce Manager should be pulling in.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>SKU</th><th>Name</th><th>Category</th><th>Price</th><th>Availability</th></tr>
+    </thead>
+    <tbody>
+      <% @products.each do |product| %>
+        <tr>
+          <td><%= product.sku %></td>
+          <td><%= link_to product.name, product_path(product) %></td>
+          <td><%= product.category.name %></td>
+          <td><%= product.formatted_price %></td>
+          <td><span class="badge <%= "out" unless product.in_stock? %>"><%= product.availability.tr("_", " ") %></span></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>

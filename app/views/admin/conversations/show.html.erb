@@ -1,0 +1,24 @@
+<% content_for :title, "Admin · #{@conversation.customer.whatsapp_number}" %>
+<%= render "admin/nav" %>
+<div class="wrap">
+  <p><%= link_to "← All conversations", admin_conversations_path, class: "muted" %></p>
+  <h1><%= @conversation.customer.display_name.presence || @conversation.customer.whatsapp_number %></h1>
+  <p class="muted"><%= @conversation.customer.whatsapp_number %></p>
+
+  <div class="card">
+    <% if @conversation.messages.empty? %>
+      <p class="muted">No messages yet.</p>
+    <% else %>
+      <% @conversation.messages.each do |message| %>
+        <div class="msg-row <%= message.direction %>">
+          <div class="msg-meta">
+            <%= message.direction == "inbound" ? "← customer" : "→ bot" %>
+            · <%= message.message_type %>
+            · <%= message.created_at.strftime("%b %-d, %H:%M:%S") %>
+          </div>
+          <div><%= message.body.presence || "(no text body — #{message.message_type} payload)" %></div>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+</div>

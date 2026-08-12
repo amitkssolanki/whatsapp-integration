@@ -1,0 +1,31 @@
+<% content_for :title, "Admin · Order ##{@order.id}" %>
+<%= render "admin/nav" %>
+<div class="wrap">
+  <p><%= link_to "← All orders", admin_orders_path, class: "muted" %></p>
+  <h1>Order #<%= @order.id %></h1>
+  <p class="muted">
+    <%= @order.customer.display_name.presence || @order.customer.whatsapp_number %>
+    · <%= @order.customer.whatsapp_number %>
+    · placed <%= @order.created_at.strftime("%b %-d, %Y %H:%M") %>
+  </p>
+
+  <div class="card">
+    <table>
+      <thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead>
+      <tbody>
+        <% @order.order_items.each do |item| %>
+          <tr>
+            <td><%= item.product&.name || item.product_retailer_id %></td>
+            <td><%= item.quantity %></td>
+            <td><%= number_to_currency(item.item_price) %></td>
+            <td><%= number_to_currency(item.line_total_cents / 100.0) %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+    <p style="text-align:right;margin-top:0.75rem;"><strong>Total: <%= @order.formatted_total %></strong></p>
+    <% if @order.wa_order_note.present? %>
+      <p class="muted">Note from customer: “<%= @order.wa_order_note %>”</p>
+    <% end %>
+  </div>
+</div>

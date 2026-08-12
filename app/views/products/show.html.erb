@@ -1,0 +1,15 @@
+<% content_for :title, @product.name %>
+<div class="wrap">
+  <p><%= link_to "← The Local Table", root_path, class: "muted" %></p>
+
+  <div class="product-hero">
+    <img src="<%= @product.image_url %>" alt="<%= @product.name %>">
+  </div>
+
+  <span class="badge <%= "out" unless @product.in_stock? %>">
+    <%= @product.availability.tr("_", " ") %>
+  </span>
+  <h1><%= @product.name %></h1>
+  <p class="muted"><%= @product.category.name %> · <%= @product.formatted_price %></p>
+  <p><%= @product.description %></p>
+</div>

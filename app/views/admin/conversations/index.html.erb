@@ -1,0 +1,23 @@
+<% content_for :title, "Admin · Conversations" %>
+<%= render "admin/nav" %>
+<div class="wrap">
+  <h1>Conversations</h1>
+  <p class="muted">Every WhatsApp customer who has messaged the demo number.</p>
+
+  <table>
+    <thead>
+      <tr><th>Customer</th><th>WhatsApp #</th><th>Messages</th><th>Last activity</th><th></th></tr>
+    </thead>
+    <tbody>
+      <% @conversations.each do |conversation| %>
+        <tr>
+          <td><%= conversation.customer.display_name.presence || "—" %></td>
+          <td><%= conversation.customer.whatsapp_number %></td>
+          <td><%= conversation.messages.size %></td>
+          <td><%= conversation.last_message_at&.strftime("%b %-d, %H:%M") || "—" %></td>
+          <td><%= link_to "View →", admin_conversation_path(conversation) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
