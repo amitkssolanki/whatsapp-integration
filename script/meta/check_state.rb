@@ -27,6 +27,11 @@ end
 
 def mask(number) = number.to_s.gsub(/\d(?=\d{4})/, "•")
 
+# Every check records a result; a failed request is a failed check. (The first
+# version only recorded checks that succeeded, so a FAIL could still end in
+# "all checks passed".)
+CHECKS = []
+
 def report(label, status, body)
   if status == 200
     puts "OK   #{label}"
@@ -34,11 +39,12 @@ def report(label, status, body)
   else
     error = body["error"] || {}
     puts "FAIL #{label}: HTTP #{status} code=#{error['code']} #{error['message'].to_s[0, 160]}"
+    CHECKS << false
   end
 end
 
 token = config.token
-checks = []
+checks = CHECKS
 
 if config.phone_number_id.present?
   status, body = get(config.phone_number_id, { fields: "platform_type,status,code_verification_status,quality_rating,name_status,messaging_limit_tier,display_phone_number,verified_name" }, token)
@@ -50,9 +56,24 @@ if config.phone_number_id.present?
   end
 else
   puts "SKIP phone number: WHATSAPP_PHONE_NUMBER_ID not set"
+  checks << false
 end
 
 if config.business_account_id.present?
+  # Which numbers this WhatsApp Business Account holds now, so a phone number id
+  # that no longer resolves can be compared with what actually exists.
+  status, body = get("#{config.business_account_id}/phone_numbers", { fields: "id,display_phone_number,verified_name,platform_type,status,code_verification_status,quality_rating" }, token)
+  report("phone numbers on the WhatsApp Business Account", status, body) do |b|
+    numbers = Array(b["data"])
+    puts "       #{numbers.size} number(s)#{numbers.empty? ? ': NONE' : ''}"
+    numbers.each do |n|
+      configured = n["id"].to_s == config.phone_number_id.to_s ? "  <- WHATSAPP_PHONE_NUMBER_ID" : ""
+      puts "       id=#{n['id']} number=#{mask(n['display_phone_number'])} platform=#{n['platform_type']} status=#{n['status']} " \
+           "verification=#{n['code_verification_status']} quality=#{n['quality_rating']}#{configured}"
+    end
+    checks << numbers.any? { |n| n["id"].to_s == config.phone_number_id.to_s && n["platform_type"] == "CLOUD_API" }
+  end
+
   status, body = get("#{config.business_account_id}/subscribed_apps", {}, token)
   report("webhook subscription (subscribed_apps)", status, body) do |b|
     apps = Array(b["data"]).map { |a| a.dig("whatsapp_business_api_data", "name") || a["name"] || "app" }
@@ -63,12 +84,19 @@ if config.business_account_id.present?
   status, body = get("#{config.business_account_id}/product_catalogs", {}, token)
   report("catalog linked to the WhatsApp Business Account", status, body) do |b|
     catalogs = Array(b["data"])
-    puts "       linked catalogs: #{catalogs.size}#{catalogs.any? ? " (#{catalogs.map { |c| c['name'] }.join(', ')})" : ''}"
-    puts "       matches CATALOG_ID: #{catalogs.any? { |c| c['id'].to_s == config.catalog_id.to_s }}" if config.catalog_id.present?
+    puts "       linked catalogs: #{catalogs.size}"
+    catalogs.each { |c| puts "       id=#{c['id']} name=#{c['name']}" }
+    if config.catalog_id.present?
+      puts "       matches CATALOG_ID: #{catalogs.any? { |c| c['id'].to_s == config.catalog_id.to_s }}"
+    else
+      puts "       CATALOG_ID is not set: put the id above in .env to enable the catalog read check"
+      checks << false
+    end
     checks << catalogs.any?
   end
 else
   puts "SKIP WABA checks: WHATSAPP_BUSINESS_ACCOUNT_ID not set"
+  checks << false
 end
 
 if config.catalog_id.present?
