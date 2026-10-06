@@ -19,7 +19,8 @@ module Ops
         exact_duplicate_bodies: duplicate_bodies,
         item_outcomes: item_outcomes(outcomes),
         items_by_kind: Stats.zero_filled(KINDS, items.filter_map { |item| item["kind"] if item.is_a?(Hash) }.tally),
-        replays: { total: @scope.sum(:replay_count), deliveries_replayed: @scope.where(replay_count: 1..).count }
+        replays: { total: @scope.sum(:replay_count), deliveries_replayed: @scope.where(replay_count: 1..).count },
+        injected_faults: @scope.where("cardinality(injected_faults) > 0").count
       }
     end
 

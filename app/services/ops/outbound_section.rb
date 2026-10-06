@@ -23,6 +23,7 @@ module Ops
         unknown_unresolved: unknown_ever.count - unknown_resolved.count,
         blocked: @scope.blocked.count,
         guard_overrides: @scope.where.not(guard_override_by: [ nil, "" ]).count,
+        injected_faults: @scope.where("cardinality(injected_faults) > 0").count,
         undelivered: @scope.where(status: %w[accepted sent], delivered_at: nil).where(accepted_at: ...(@at - UNDELIVERED_AFTER)).count
       }
     end
