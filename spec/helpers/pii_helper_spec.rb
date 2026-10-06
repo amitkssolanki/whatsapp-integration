@@ -51,5 +51,13 @@ RSpec.describe PiiHelper, type: :helper do
     it "removes Meta message ids from free text" do
       expect(helper.scrub_ids("failed for wamid.ABC123== today")).to eq("failed for [id] today")
     end
+
+    it "leaves phone numbers in free text alone unless masking" do
+      expect(helper.scrub_ids("to 15550001234")).to eq("to 15550001234")
+
+      Rails.application.config.whatsapp.mask_pii = true
+
+      expect(helper.scrub_ids("to 15550001234, order 42")).to eq("to •••1234, order 42")
+    end
   end
 end

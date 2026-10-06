@@ -14,7 +14,7 @@ module PiiHelper
     return "—" unless customer
     return "Customer ##{customer.id}" if pii_masked?
 
-    customer.display_name.presence || "Customer ##{customer.id}"
+    scrub_ids(customer.display_name).presence || "Customer ##{customer.id}"
   end
 
   # "+15550001234", or "+•• ••••• •1234" when masked. Customers Meta identifies
@@ -46,8 +46,12 @@ module PiiHelper
   end
 
   # Free text from outside (message bodies, Meta error text, outcome details)
-  # with any Meta message id removed.
+  # with any Meta message id removed and, when masking, long digit runs (phone
+  # numbers that Meta's error text sometimes echoes) reduced to their last four.
   def scrub_ids(text)
-    text.to_s.gsub(Redact::WAMID, "[id]")
+    scrubbed = text.to_s.gsub(Redact::WAMID, "[id]")
+    return scrubbed unless pii_masked?
+
+    scrubbed.gsub(Redact::DIGIT_RUN) { |digits| "#{DOT * 3}#{digits.last(4)}" }
   end
 end
