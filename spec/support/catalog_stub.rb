@@ -18,6 +18,7 @@ module CatalogStub
   def stub_catalog_http(&block)
     stubs = Faraday::Adapter::Test::Stubs.new(&block)
     connection = Catalog::Client.build_connection(adapter: [ :test, stubs ])
+    allow(Catalog::Client).to receive(:new).and_call_original # drop any earlier stub before building
     client = Catalog::Client.new(connection: connection)
     allow(Catalog::Client).to receive(:new).and_return(client)
     client
