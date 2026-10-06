@@ -28,7 +28,10 @@ class Message < ApplicationRecord
   ALLOWED_TRANSITIONS = {
     "pending" => %w[sending blocked],
     "sending" => %w[accepted retry_scheduled failed unknown blocked],
-    "retry_scheduled" => %w[sending blocked],
+    # A status webhook (found by our opaque id) can prove that a send we judged
+    # retryable (5xx, 131000) was in fact processed: catch up to what Meta
+    # reported instead of sending a second copy. See #catch_up_lifecycle!.
+    "retry_scheduled" => %w[sending blocked sent delivered read failed],
     "accepted" => %w[sent delivered read failed],
     "sent" => %w[delivered read failed],
     "delivered" => %w[read],
@@ -44,8 +47,17 @@ class Message < ApplicationRecord
   # `blocked -> pending` additionally requires the 24h window to be open. That
   # check spans tables, so #requeue! enforces it (and #override_window_send!
   # deliberately sidesteps it), not the state machine.
+  #
+  # `retry_scheduled -> sending` (the retry's claim) additionally requires that
+  # Meta has not already reported on the message: a wa_message_id or a sent /
+  # delivered / read timestamp is proof an earlier attempt arrived, and sending
+  # again would deliver a second copy. The condition sits in the claim's UPDATE
+  # so a status webhook cannot slip in between a check and the claim.
+  NO_DELIVERY_EVIDENCE = { wa_message_id: nil, sent_at: nil, delivered_at: nil, read_at: nil }.freeze
+
   TRANSITION_GUARDS = {
-    %w[failed pending] => { error_category: RESENDABLE_ERROR_CATEGORIES }
+    %w[failed pending] => { error_category: RESENDABLE_ERROR_CATEGORIES },
+    %w[retry_scheduled sending] => NO_DELIVERY_EVIDENCE
   }.freeze
 
   # Delivery lifecycle as reported by Meta, in forward order, and the column
@@ -182,19 +194,28 @@ class Message < ApplicationRecord
                                        last_inbound_at: conversation.last_inbound_at&.iso8601)
   end
 
-  private
+  # True when Meta has already told us something about this message: its id, or
+  # a sent / delivered / read timestamp.
+  def delivery_evidence?
+    wa_message_id.present? || %w[sent delivered read].any? { |step| self[LIFECYCLE_COLUMNS.fetch(step)] }
+  end
 
   # Moves forward to the furthest lifecycle step that has a timestamp, if that is
   # progress. Never while `sending` (the sender has not recorded its outcome yet)
-  # and never backwards. Returns true when the state moved.
+  # and never backwards. Leaving `retry_scheduled` this way also drops the retry
+  # bookkeeping: the attempt that "failed" evidently arrived. Returns true when
+  # the state moved.
   def catch_up_lifecycle!
     return false if sending?
 
     target = LIFECYCLE.reverse.find { |step| self[LIFECYCLE_COLUMNS.fetch(step)] }
     return false unless target && lifecycle_rank(target) > lifecycle_rank(status)
+    return transition!(target, next_attempt_at: nil, error_code: nil, error_category: nil, error_title: nil, error_details: nil) if retry_scheduled?
 
     transition!(target)
   end
+
+  private
 
   def require_actor!(by)
     raise ArgumentError, "by: is required" if by.blank?

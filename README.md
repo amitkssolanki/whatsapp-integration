@@ -152,7 +152,9 @@ at most once, even when the state cannot advance (a late `delivered` after
 `read` still fills `delivered_at`). A `failed` after `delivered` or `read`
 changes nothing and is recorded as an `anomaly` item. Statuses that arrive while
 a send is still `sending` stamp their time only; the state catches up when the
-send settles, so proof of delivery is never stranded behind `unknown`. A status
+send settles, so proof of delivery is never stranded behind `unknown`. The same
+holds for a `retry_scheduled` message (a 5xx that Meta had in fact processed): the status
+settles it and the scheduled retry refuses to send a second copy. A status
 for an unknown message is stored as an `orphan` item and applied on replay.
 
 **No automatic resend of ambiguous sends.** A read timeout, or a connection

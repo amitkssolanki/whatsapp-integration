@@ -122,7 +122,7 @@ sent 40, delivered 50, read 60, failed 90, blocked 91, unknown 92`; inbound rows
 |---|---|
 | pending | sending, blocked |
 | sending | accepted, retry_scheduled, failed, unknown, blocked |
-| retry_scheduled | sending, blocked |
+| retry_scheduled | sending (only while Meta has reported nothing: no wa_message_id, no sent/delivered/read timestamp), blocked, sent, delivered, read, failed (the latter four only from a status webhook) |
 | accepted | sent, delivered, read, failed |
 | sent | delivered, read, failed |
 | delivered | read |
@@ -139,6 +139,13 @@ unknown, accepted or later. Statuses that arrive while a message is still `sendi
 only stamp their timestamp; whenever the message then moves to `accepted` or
 `unknown` (including via the stall sweeper) its state catches up to the furthest
 stamped step, so proof of delivery is never stranded behind `unknown`.
+
+A `retry_scheduled` message can be advanced by a status webhook too: when the POST got a
+5xx or 131000 but Meta did process it, a `sent`/`delivered`/`read` status (found by our
+opaque id, which also stores the `wa_message_id`) moves the row straight to that step and
+clears the retry bookkeeping. The retry's claim refuses a message with a `wa_message_id`
+or a sent/delivered/read timestamp (logged `send.claim_refused_already_processed`) and
+applies the same catch-up instead, so the customer never receives the message twice.
 
 Operator actions (backend only, they write rows and enqueue jobs): `Order#accept!/reject!`
 (reason required; queue the `order:<id>:accepted|rejected` notification in the same

@@ -3,7 +3,11 @@
 #
 #   1. claim     pending | retry_scheduled -> sending, in one conditional UPDATE.
 #                Whoever loses exits; this is the only thing that stops two
-#                workers sending the same message.
+#                workers sending the same message. A retry_scheduled message
+#                that Meta has already reported on (an id, or a sent / delivered
+#                / read status arrived through the opaque id after our 5xx) is
+#                not claimed: it is settled from that evidence instead, so the
+#                customer never gets the message twice.
 #   2. guard     24h window closed -> blocked, Meta is not called.
 #   3. send      the HTTP call, outside any transaction.
 #   4. record    accepted | retry_scheduled | failed | unknown, in its own
@@ -38,7 +42,7 @@ class SendMessageJob < ApplicationJob
   def perform(message_id)
     message = Message.outbound.find_by(id: message_id)
     return skip(message_id, "missing") unless message
-    return skip(message.id, "not_claimable", status: message.status) unless claim(message)
+    return refuse_processed(message) || skip(message.id, "not_claimable", status: message.status) unless claim(message)
 
     return unless window_allows?(message)
 
@@ -50,6 +54,19 @@ class SendMessageJob < ApplicationJob
 
   def claim(message)
     message.transition!(:sending, attempts: Arel.sql("attempts + 1"), next_attempt_at: nil)
+  end
+
+  # The claim lost because Meta already reported on this message while it
+  # waited for a retry. Settle it from the evidence (normally the status webhook
+  # already did) and do not send. Returns true when this was the reason.
+  def refuse_processed(message)
+    message.reload
+    return false unless message.retry_scheduled? && message.delivery_evidence?
+
+    message.catch_up_lifecycle!
+    AppLog.event("send.claim_refused_already_processed", job_id: job_id, message_id: message.id,
+                                                          status: message.status, has_wa_message_id: message.wa_message_id.present?)
+    true
   end
 
   # Returns false (after blocking the message) when the window is closed.
