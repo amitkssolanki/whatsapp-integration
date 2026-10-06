@@ -38,5 +38,8 @@ module WhatsappIntegration
 
     # Don't generate system test files.
     config.generators.system_tests = nil
+
+    # Single-database Solid Queue (see db/migrate/*_create_solid_queue_tables.rb).
+    config.active_job.queue_adapter = :solid_queue
   end
 end

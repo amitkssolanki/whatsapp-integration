@@ -85,16 +85,8 @@ test:
 # for a full overview on how database connection configuration can be specified.
 #
 production:
-  primary: &primary_production
-    <<: *default
-    database: whatsapp_integration_production
-    username: whatsapp_integration
-    password: <%= ENV["WHATSAPP_INTEGRATION_DATABASE_PASSWORD"] %>
-  cache:
-    <<: *primary_production
-    database: whatsapp_integration_production_cache
-    migrations_paths: db/cache_migrate
-  queue:
-    <<: *primary_production
-    database: whatsapp_integration_production_queue
-    migrations_paths: db/queue_migrate
+  <<: *default
+  database: whatsapp_integration_production
+  username: whatsapp_integration
+  password: <%= ENV["WHATSAPP_INTEGRATION_DATABASE_PASSWORD"] %>
+  host: <%= ENV.fetch("DB_HOST", "localhost") %>

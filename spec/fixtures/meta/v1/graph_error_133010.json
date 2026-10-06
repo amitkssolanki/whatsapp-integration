@@ -1,0 +1,11 @@
+{
+  "http_status": 400,
+  "body": {
+    "error": {
+      "message": "(#133010) Account not registered",
+      "code": 133010,
+      "type": "OAuthException",
+      "fbtrace_id": "FAKETRACE1"
+    }
+  }
+}

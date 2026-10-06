@@ -1,0 +1,15 @@
+{
+  "http_status": 400,
+  "body": {
+    "error": {
+      "message": "(#131009) Parameter value is not valid",
+      "code": 131009,
+      "type": "OAuthException",
+      "error_data": {
+        "messaging_product": "whatsapp",
+        "details": "action['parameters'] cannot be empty."
+      },
+      "fbtrace_id": "FAKETRACE3"
+    }
+  }
+}

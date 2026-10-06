@@ -1,0 +1,62 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "100000000000004",
+      "changes": [
+        {
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550100005",
+              "phone_number_id": "100000000000005"
+            },
+            "contacts": [
+              {
+                "profile": {
+                  "name": "Test Customer 2"
+                },
+                "wa_id": "15550100004",
+                "user_id": "US.1000000000000002"
+              }
+            ],
+            "messages": [
+              {
+                "from": "15550100004",
+                "from_user_id": "US.1000000000000002",
+                "id": "wamid.HBgLMTU1NTAxMDAwMDEFQIAERgSTpBVP5gBvbWk/9laW7V65tojAA==",
+                "timestamp": "1786204851",
+                "type": "order",
+                "order": {
+                  "catalog_id": "100000000000006",
+                  "text": "",
+                  "product_items": [
+                    {
+                      "product_retailer_id": "MAI-006",
+                      "quantity": 1,
+                      "item_price": 15.5,
+                      "currency": "USD"
+                    },
+                    {
+                      "product_retailer_id": "BEV-001",
+                      "quantity": 1,
+                      "item_price": 4.5,
+                      "currency": "USD"
+                    },
+                    {
+                      "product_retailer_id": "DES-003",
+                      "quantity": 1,
+                      "item_price": 5,
+                      "currency": "USD"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}

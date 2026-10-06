@@ -52,10 +52,10 @@ RSpec.describe "WhatsApp webhook", type: :request do
       it "responds to a plain text greeting without creating an order" do
         text_payload = {
           object: "whatsapp_business_account",
-          entry: [{ id: "WABA_ID", changes: [{ field: "messages", value: {
-            contacts: [{ profile: { name: "Jordan" }, wa_id: "15559998888" }],
-            messages: [{ from: "15559998888", id: "wamid.1", timestamp: "1", type: "text", text: { body: "hi" } }]
-          } }] }]
+          entry: [ { id: "WABA_ID", changes: [ { field: "messages", value: {
+            contacts: [ { profile: { name: "Jordan" }, wa_id: "15559998888" } ],
+            messages: [ { from: "15559998888", id: "wamid.1", timestamp: "1", type: "text", text: { body: "hi" } } ]
+          } } ] } ]
         }.to_json
 
         expect {
