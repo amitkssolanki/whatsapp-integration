@@ -38,4 +38,17 @@ RSpec.describe "Admin and public pages", type: :request do
       expect(response).to have_http_status(:ok), "#{path} returned #{response.status}"
     end
   end
+
+  it "still renders every admin page after the end-of-period purge anonymised everything" do
+    delivery = create_delivery(status: :processed, received_at: 3.days.ago)
+    travel_to(1.day.from_now) { Ops::Purge.new(before: Time.current, force: true).call }
+    expect(customer.reload).to be_purged
+
+    paths = [ "/admin/conversations", "/admin/conversations/#{customer.conversation.id}", "/admin/orders", "/admin/orders/#{Order.first.id}",
+              "/admin/health", "/admin/deliveries", "/admin/deliveries/#{delivery.id}" ]
+    paths.each do |path|
+      get path
+      expect(response).to have_http_status(:ok), "#{path} returned #{response.status}"
+    end
+  end
 end

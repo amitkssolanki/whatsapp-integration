@@ -139,12 +139,19 @@ class Message < ApplicationRecord
     accepted_at: nil, sent_at: nil, delivered_at: nil, read_at: nil
   }.freeze
 
+  # Ops::Purge removed this message's text, payload and Meta id; there is nothing
+  # left to send, so the operator actions refuse it.
+  PURGED_REASON = "purged".freeze
+
+  def purged? = purged_at.present?
+
   # Operator actions (docs/v2/DESIGN.md §3). They only write the row and enqueue
   # the job; they never call Meta. Each returns an ActionResult.
 
   # failed -> pending, for categories a human can fix (config, exhausted retries).
   def resend!(by:)
     require_actor!(by)
+    return ActionResult.refused(PURGED_REASON) if purged?
     return ActionResult.refused("only a failed message can be resent (it is #{status})") unless failed?
     unless RESENDABLE_ERROR_CATEGORIES.include?(error_category)
       return ActionResult.refused("a #{error_category || 'uncategorised'} failure cannot be resent: it would fail the same way")
@@ -157,6 +164,7 @@ class Message < ApplicationRecord
   # blocked -> pending, only while the 24h window is open now.
   def requeue!(by:)
     require_actor!(by)
+    return ActionResult.refused(PURGED_REASON) if purged?
     return ActionResult.refused("only a blocked message can be requeued (it is #{status})") unless blocked?
     return ActionResult.refused("the 24-hour window is closed; wait for the customer to write again") unless conversation.reload.window_open?
 
@@ -168,6 +176,7 @@ class Message < ApplicationRecord
   # find out. Logged loudly here and again when the job honours it.
   def override_window_send!(by:)
     require_actor!(by)
+    return ActionResult.refused(PURGED_REASON) if purged?
     return ActionResult.refused("only a blocked message can be overridden (it is #{status})") unless blocked?
 
     AppLog.warn("window.override_requested", message_id: id, by: by)

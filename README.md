@@ -313,8 +313,11 @@ Operating tools (`docs/operating/PROTOCOL.md`):
   webhooks through the real controller, an in-process fake Graph API. It runs
   only in development and only against a database whose name contains `_demo`:
   `DATABASE_URL=postgres:///whatsapp_integration_demo bin/rails db:prepare db:seed demo:simulate`.
-- `bin/rails ops:purge_payloads BEFORE=YYYY-MM-DD CONFIRM=yes` removes raw
-  webhook bodies and message payloads older than the date; counts and statuses stay.
+- `bin/rails ops:purge BEFORE=YYYY-MM-DD CONFIRM=yes` (alias `ops:purge_payloads`) removes
+  raw webhook bodies, message text, Meta message ids, order notes and customers' names and
+  phone numbers for records older than the date; counts and statuses stay. It skips, and
+  reports, work still in use (unapplied deliveries, unsent/failed/unknown messages) unless
+  `FORCE=yes`.
 
 Real Meta traffic needs a public HTTPS URL for `/webhooks/whatsapp`; that is
 not automated here.

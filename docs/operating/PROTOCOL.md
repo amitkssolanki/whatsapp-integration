@@ -79,7 +79,22 @@ Medians and ranges only; no percentiles on small samples.
 ## After the period
 
 1. Tag `ops-end`, take the final dump into the private archive.
-2. Purge raw webhook bodies and message payloads older than 30 days after the end date
-   (aggregates and statuses stay): `bin/rails ops:purge_payloads BEFORE=YYYY-MM-DD CONFIRM=yes`.
-   Purged deliveries can no longer be replayed.
+2. Purge personal data for everything before the purge date (30 days after the end date),
+   keeping the aggregates: `bin/rails ops:purge BEFORE=YYYY-MM-DD CONFIRM=yes` (without
+   `CONFIRM=yes` it only prints what it would do; `ops:purge_payloads` is the old name).
+   It removes:
+   - `webhook_deliveries`: the raw body, and the Meta message ids in the item results
+     (replaced by a fingerprint);
+   - `messages`: text body, payload, Meta message id and error details;
+   - `orders`: the order note;
+   - `customers` whose last activity is before the date: name and phone number (the user id
+     becomes `purged:<id>`).
+
+   It keeps statuses, timestamps, counts, error codes/categories, body hashes and item
+   results, so `ops:report` gives the same numbers afterwards. It does **not** purge work still
+   in use, and says so: deliveries `received`/`processing`/`failed`/`partially_failed`,
+   outbound messages `pending`/`sending`/`retry_scheduled`/`failed`/`unknown`, and customers
+   with such a message. Resolve or replay those first (the daily check), or add `FORCE=yes`
+   to purge them anyway (then they can never be replayed or resent). Purged deliveries cannot
+   be replayed; purged messages cannot be resent.
 3. Write results only from `ops:report` and the scenario log.

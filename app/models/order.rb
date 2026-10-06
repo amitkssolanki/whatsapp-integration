@@ -44,6 +44,7 @@ class Order < ApplicationRecord
 
   def decide!(to, by:, **attrs)
     raise ArgumentError, "by: is required" if by.blank?
+    return ActionResult.refused("the customer's data was purged; there is no one to notify") if customer.purged?
 
     queued = nil
     moved = transaction do

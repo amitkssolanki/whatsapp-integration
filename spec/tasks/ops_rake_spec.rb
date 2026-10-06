@@ -57,39 +57,66 @@ RSpec.describe "ops:report" do
   end
 end
 
-RSpec.describe "ops:purge_payloads" do
-  before(:all) { Rails.application.load_tasks unless Rake::Task.task_defined?("ops:purge_payloads") }
+RSpec.describe "ops:purge" do
+  before(:all) { Rails.application.load_tasks unless Rake::Task.task_defined?("ops:purge") }
 
-  let(:task) { Rake::Task["ops:purge_payloads"] }
+  let(:task) { Rake::Task["ops:purge"] }
   let(:body) { '{"object":"whatsapp_business_account","entry":[]}' }
   let(:cutoff) { Date.current.iso8601 }
-  let!(:old_delivery) { create_delivery(body: body, received_at: 40.days.ago) }
-  let!(:old_message) { create_outbound(created_at: 40.days.ago, status: :delivered) }
+  let!(:old_delivery) { create_delivery(body: body, received_at: 40.days.ago, status: :processed) }
+  let!(:old_message) { create_outbound(created_at: 40.days.ago, status: :delivered, wa_message_id: "wamid.HBgMX") }
+  let!(:held_message) { create_outbound(created_at: 40.days.ago, status: :failed, customer: create_customer(number: "15550100077")) }
 
-  def run_task(**env)
+  before do
+    Customer.update_all(created_at: 40.days.ago)
+    Conversation.update_all(created_at: 40.days.ago, updated_at: 40.days.ago)
+  end
+
+  def run_task(name: "ops:purge", **env)
+    task = Rake::Task[name]
     task.reenable
-    saved = ENV.to_h.slice("BEFORE", "CONFIRM")
-    %w[BEFORE CONFIRM].each { |key| ENV.delete(key) }
+    Rake::Task["ops:purge"].reenable
+    saved = ENV.to_h.slice("BEFORE", "CONFIRM", "FORCE")
+    %w[BEFORE CONFIRM FORCE].each { |key| ENV.delete(key) }
     env.each { |key, value| ENV[key.to_s] = value }
-    yield
+    yield task
   ensure
-    %w[BEFORE CONFIRM].each { |key| ENV.delete(key) }
+    %w[BEFORE CONFIRM FORCE].each { |key| ENV.delete(key) }
     saved.each { |key, value| ENV[key] = value }
   end
 
-  it "purges and prints the counts with BEFORE and CONFIRM=yes" do
-    run_task(BEFORE: cutoff, CONFIRM: "yes") do
-      expect { task.invoke }.to output(/webhook_deliveries raw_body blanked: 1.*messages raw_payload cleared:\s+1/m).to_stdout
+  it "purges and prints the counts per table, including what it skipped, with BEFORE and CONFIRM=yes" do
+    run_task(BEFORE: cutoff, CONFIRM: "yes") do |task|
+      expect { task.invoke }.to output(/webhook_deliveries.*purged: 1.*messages.*purged: 1.*customers.*anonymised: 1.*orders.*cleared: 0.*SKIPPED.*outbound messages:\s+1 \{"failed" => 1\}.*customers with such a message: 1/m).to_stdout
     end
 
     expect(old_delivery.reload).to have_attributes(raw_body: "", purged_at: be_present)
-    expect(old_message.reload.raw_payload).to eq({})
+    expect(old_message.reload).to have_attributes(raw_payload: {}, body: nil, wa_message_id: nil)
+    expect(held_message.reload.body).to eq("hello")
+  end
+
+  it "purges what it skipped only with FORCE=yes" do
+    run_task(BEFORE: cutoff, CONFIRM: "yes", FORCE: "yes") do |task|
+      expect { task.invoke }.to output(/\(FORCE\)/).to_stdout
+    end
+
+    expect(held_message.reload.body).to be_nil
+  end
+
+  it "is also available under its old name, ops:purge_payloads" do
+    before_all = Rake::Task["ops:purge_payloads"]
+    expect(before_all.prerequisites).to eq([ "purge" ])
+
+    run_task(name: "ops:purge_payloads", BEFORE: cutoff, CONFIRM: "yes") do |task|
+      expect { task.invoke }.to output(/Purged before/).to_stdout
+    end
+    expect(old_delivery.reload.purged_at).to be_present
   end
 
   it "refuses without CONFIRM=yes, says what it would do and changes nothing" do
     [ {}, { CONFIRM: "y" }, { CONFIRM: "true" } ].each do |extra|
-      run_task(BEFORE: cutoff, **extra) do
-        expect { task.invoke }.to raise_error(SystemExit).and output(/without CONFIRM=yes.*1 webhook delivery bodies and 1 message payloads/m).to_stderr
+      run_task(BEFORE: cutoff, **extra) do |task|
+        expect { task.invoke }.to raise_error(SystemExit).and output(/without CONFIRM=yes.*webhook_deliveries.*to purge: 1.*messages.*to purge: 1.*SKIPPED/m).to_stderr
       end
     end
 
@@ -99,7 +126,7 @@ RSpec.describe "ops:purge_payloads" do
 
   it "refuses a missing, malformed, impossible or future BEFORE" do
     [ nil, "12/01/2026", "2026-13-45", "2999-01-01" ].each do |value|
-      run_task(**{ BEFORE: value, CONFIRM: "yes" }.compact) do
+      run_task(**{ BEFORE: value, CONFIRM: "yes" }.compact) do |task|
         expect { task.invoke }.to raise_error(SystemExit).and output(/BEFORE/).to_stderr
       end
     end

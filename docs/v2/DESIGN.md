@@ -60,7 +60,7 @@ transaction is atomic with it.
 | last_attempted_at, processed_at | datetime | |
 | replay_count | integer, null: false, default 0 | |
 | last_replayed_at, last_replayed_by | datetime, string | |
-| purged_at | datetime | set by `ops:purge_payloads` (§13); raw_body is then '' and raw_body_base64 NULL, and the delivery can no longer be replayed |
+| purged_at | datetime | set by `ops:purge` (§13); raw_body is then '' and raw_body_base64 NULL, outcome refs are hashed, and the delivery can no longer be replayed |
 
 Indexes: `[status, received_at]`, `body_sha256`, `received_at`.
 
@@ -320,14 +320,34 @@ The Health page shows a red banner listing the active toggles.
 
 ## 13. Purge after the operating period
 
-`bin/rails ops:purge_payloads BEFORE=YYYY-MM-DD CONFIRM=yes` (`Ops::Purge`) removes the
-personal data that raw payloads hold and keeps all aggregates: `webhook_deliveries` received
-before the date get `raw_body = ''`, `raw_body_base64 = NULL` and `purged_at`; `messages`
-created before the date get `raw_payload = {}`, except outbound messages still
-`pending`/`sending`/`retry_scheduled` (their payload is the request about to be sent; the
-task reports how many were skipped). Without `CONFIRM=yes` the task refuses and prints what
-it would do. BEFORE may not be in the future. A purged delivery refuses replay
-("the raw body was purged on <date>") and the admin UI hides its Replay button.
+`bin/rails ops:purge BEFORE=YYYY-MM-DD CONFIRM=yes [FORCE=yes]` (`Ops::Purge`; the old name
+`ops:purge_payloads` is an alias) keeps the consent promise ("phone number and name are stored
+until the purge date") and keeps every aggregate. For records created (received, for
+deliveries) before the date:
+
+| table | removed | marker |
+|---|---|---|
+| `webhook_deliveries` | `raw_body = ''`, `raw_body_base64 = NULL`, Meta ids in `outcome.items[].ref` replaced by `purged:<12 hex of sha256>` | `purged_at` |
+| `messages` | `body`, `raw_payload = {}`, `wa_message_id`, `error_details` set to NULL / empty | `purged_at` |
+| `orders` | `wa_order_note` NULL | |
+| `customers` whose last activity (creation, last message either way, last order) is before the date | `display_name` NULL, `whatsapp_number` NULL, `wa_user_id = 'purged:<id>'` (the identity check constraint needs one) | `purged_at`, `purged_had_phone` |
+
+Kept: statuses, timestamps, attempt counts, error code/category/title, body hashes, item
+results and the other aggregates. `ops:report` gives the same counts before and after
+(`customers_without_phone` reads `purged_had_phone` for purged customers).
+
+Skipped and reported, never silently lost (unless `FORCE=yes`): deliveries in
+`received`/`processing`/`failed`/`partially_failed` (unapplied items; the body is what a replay
+needs), outbound messages in `pending`/`sending`/`retry_scheduled` (the request about to be
+sent), `failed` (resendable) and `unknown` (waiting for a status that names its
+`wa_message_id`), and customers who have such a message. Without `CONFIRM=yes` the task refuses
+and prints the counts per table; BEFORE may not be in the future. Counts per table are printed.
+The purge is idempotent.
+
+After a purge: a purged delivery refuses replay ("the raw body was purged on <date>") and the
+admin UI hides its Replay button; `Message#resend!`/`#requeue!`/`#override_window_send!` refuse
+a purged message with the reason `purged`; `Order#accept!`/`#reject!` refuse an order whose
+customer was purged (there is no one to notify); a returning person is simply a new customer.
 
 ## 14. Demo simulator (local screenshots and video only)
 
