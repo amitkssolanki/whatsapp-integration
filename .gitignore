@@ -29,3 +29,6 @@
 # Personal phone screenshots used for the blog post, not an app asset.
 /app/assets/images/whatsapp-flow-*
 
+
+# The example is placeholders only and documents every setting.
+!/.env.example
