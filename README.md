@@ -13,30 +13,38 @@ only from later status webhooks. V2 therefore stores every delivery before
 interpreting it, applies every logical event exactly once, tracks the real fate
 of every outbound message, and makes failures visible and recoverable.
 
-It is not deployed, it has no customers, and it has never been run against
-Meta (see Status). The original demo is preserved at tag `v1`. The lessons
-behind the design are written up in the
+It is deployed as an integration environment at
+https://whatsapp.railsfanatics.com and has completed one real end-to-end
+verification session against Meta (2026-10-06, the author as the only
+customer; see [the session write-up](docs/evidence/2026-10-06-verification-session-1.md)).
+It has no real customers, and the controlled operating period has not started
+(see Status). The original demo is preserved at tag `v1`. The lessons behind
+the design are written up in the
 [field guide article](https://amitsolanki.com/writing/whatsapp-catalog-cart-field-guide/).
 
 ## Status
 
-Evidence is labelled by kind. **Real** is traffic from V1's live run on
-2026-08-08. **Simulated** is signed fixtures and stubbed HTTP inside the specs.
-**Unverified** needs Meta.
+Evidence is labelled by kind. **Real (V1)** is traffic from V1's live run on
+2026-08-08. **Real (V2)** is verification session 1 on 2026-10-06: one
+participant (the author), live Meta traffic to the deployed app.
+**Simulated** is signed fixtures and stubbed HTTP inside the specs.
+**Unverified** has not been exercised against Meta.
 
 | Area | State | Evidence |
 |---|---|---|
-| Webhook intake: signature check, store-first, atomic enqueue, size guard | Implemented | Simulated (specs) |
-| Per-item idempotent processing, replay | Implemented | Simulated, using fixtures sanitized from real V1 payloads |
-| Duplicate delivery handling | Implemented | Real input: V1 received Meta's duplicate `delivered` status (fixture pair `status_duplicate_delivery_a/b.json`); V2 handling of it is a spec |
-| Outbound lifecycle, error taxonomy, 24h guard, operator actions | Implemented | Simulated. Error codes 131009, 131030, 133010 are real V1 responses; the rest of the taxonomy comes from Meta's documentation |
-| Operator UI, PII masking, fail-closed auth | Implemented | Simulated (request specs) |
-| Catalog push, batch polling, read-only reconcile | Implemented, off by default | Documentation and Faraday stubs only. **Not verified against Meta** |
-| Ops report (`ops:report`) | Implemented | Simulated (specs on seeded data) |
-| Fault injection, demo simulator, payload purge | Implemented | Simulated (specs). Injected faults are labeled permanently on the affected rows (`injected_faults`) |
-| Kamal deploy config, backup and restore scripts, runbook | Written | Specs cover only the boot-time config check, the proxy body limit and the runbook text; **never deployed**, restore drill never run on a real VPS |
-| Live Meta verification of V2 | **Not done** | |
-| Meta cutover, operating period | **Not done** | Protocol drafted in `docs/operating/PROTOCOL.md`; it records nothing yet |
+| Webhook intake: signature check, store-first, atomic enqueue, size guard | Deployed | Real (V2): 10 signed deliveries stored and processed exactly once; forged, unsigned and oversized requests rejected on the live host. Specs |
+| Per-item idempotent processing, replay | Deployed | Simulated, using fixtures sanitized from real V1 payloads. No duplicate delivery occurred in session 1 |
+| Duplicate delivery handling | Deployed | Real input from V1 (Meta delivered the same `delivered` status twice); V2 handling is a spec |
+| Outbound lifecycle and status webhooks | Deployed | Real (V2): catalog card, order receipt and acceptance notice tracked through Meta's status webhooks to `read`, including statuses arriving with `delivered` skipped |
+| Correlation id echo (`biz_opaque_callback_data`) | Deployed | Real (V2): echoed on all 7 `sent`/`delivered`/`read` webhooks, for `catalog_message` and text. **Unverified on `failed`** |
+| Error taxonomy | Deployed | Real: 131009 (V1 and V2), 131030, 133010 (V1). Other codes come from Meta's documentation |
+| 24h guard, operator actions | Deployed | Real (V2): an operator acceptance reached the customer. Window blocking and override: simulated only |
+| Order validation | Deployed | Real (V2): one clean order (prices matched the catalog). Mismatch, unknown SKU, unavailable, quantity: simulated only |
+| Operator UI, PII masking, fail-closed auth | Deployed | Real (V2): used to accept order #9; auth refusal checked on the live host. Specs |
+| Catalog push, batch polling, reconcile | Implemented, **off** | Catalog read access verified live (read-back price format `"$5.00"`). **Push (`items_batch`) not verified against Meta** |
+| Fault injection, demo simulator, synthetic seed, payload purge | Deployed | Simulated (specs, and the seed on the live host). Injected and synthetic rows are labelled permanently and excluded from real metrics |
+| Deployment, backups | Deployed | Kamal on a shared VPS; one backup taken and a non-destructive restore drill passed (2026-10-06) |
+| Operating period | **Not started** | Criteria in [`docs/operating/PROTOCOL.md`](docs/operating/PROTOCOL.md): 14+ days, 2+ participants besides the author, every scenario twice |
 
 Observed on `main` at the time of writing: `bundle exec rspec` reports 1020 examples, 0 failures
 (local PostgreSQL, about 17 seconds). Specs verify the code against the
@@ -360,17 +368,22 @@ not automated here.
 
 One VPS, Kamal 2, kamal-proxy with Let's Encrypt, PostgreSQL 17 as a Kamal
 accessory on the same host, nightly `pg_dump` by cron with an off-host copy.
-Config is `config/deploy.yml` (placeholders for host and IP are still in it);
-the procedure, secrets, rotation, restore (into a new database, never over the
-live one) and a pre-flight checklist are in
-[docs/deploy/RUNBOOK.md](docs/deploy/RUNBOOK.md). Nothing has been deployed.
+Config is `config/deploy.yml` (the host is public; the server address comes
+from the private secrets file); the procedure, secrets, rotation, restore (into
+a new database, never over the live one) and a pre-flight checklist are in
+[docs/deploy/RUNBOOK.md](docs/deploy/RUNBOOK.md). Deployed 2026-10-06 to
+https://whatsapp.railsfanatics.com, a VPS shared with other applications (both
+containers are memory-capped); a backup and a non-destructive restore drill
+were run on the live host the same day.
 
 Meta dashboard steps (app, System User token, webhook callback and
 subscription, catalog connection) are performed manually by the account owner;
 no automation in this repository drives them. `script/meta/check_state.rb` is a
 read-only checker (GET requests from a fixed allowlist, no write path).
 [docs/operating/PROTOCOL.md](docs/operating/PROTOCOL.md) defines what may be
-called an operating period and how scenarios are logged; none has happened. The
+called an operating period and how scenarios are logged. Verification session 1
+(2026-10-06) is done; the operating period has not started. Participant guide,
+operator checklist, schedule and evidence rules are next to it. The
 tooling its scenarios need (fault injection switch, `ops:repost_delivery`,
 `ops:report`, `ops:purge`, the demo simulator) is all on `main`.
 
