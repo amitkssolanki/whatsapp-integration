@@ -131,7 +131,19 @@ Each lifecycle timestamp is written at most once (`WHERE delivered_at IS NULL`),
 when the status cannot advance (a late `delivered` after `read` still fills
 `delivered_at`). `failed` arriving after delivered/read does not change state; it is
 recorded as an `anomaly` item outcome. Never resend automatically from sending,
-unknown, accepted or later.
+unknown, accepted or later. Statuses that arrive while a message is still `sending`
+only stamp their timestamp; whenever the message then moves to `accepted` or
+`unknown` (including via the stall sweeper) its state catches up to the furthest
+stamped step, so proof of delivery is never stranded behind `unknown`.
+
+Operator actions (backend only, they write rows and enqueue jobs): `Order#accept!/reject!`
+(reason required; queue the `order:<id>:accepted|rejected` notification in the same
+transaction; the rejection text is generic and does not repeat the internal reason),
+`Message#resend!` (failed, resendable categories), `#requeue!` (blocked, window open now),
+`.resend_failed!(category:)`, and `#override_window_send!` (admin experiment: sets
+`guard_override_by`, the job then sends despite a closed window and logs
+`window.override_send`). A resend/requeue restarts the attempt: attempts back to 0 and the
+previous error and lifecycle timestamps cleared.
 
 **Undelivered** is a query, not a state: outbound, status in (accepted, sent),
 `accepted_at < 10.minutes.ago`, `delivered_at IS NULL`.
@@ -227,7 +239,8 @@ Classify by Meta `code` first; HTTP status is only a fallback when there is no c
 (`docs/v2/meta-research.md`).
 
 Retry schedule (attempt n waits): 30 s, 2 min, 10 min, 30 min, then
-`failed(transient_exhausted)`; rate_limited uses at least 2 min. A retry never sends
+`failed(transient_exhausted)`; rate_limited uses at least 2 min, and 131056 waits
+`4**n` seconds (capped at 30 min, still floored at 2 min). A retry never sends
 outside the window: the guard turns it into `blocked`.
 
 Recipient: `to` = phone number when known, else `recipient` = business-scoped user id
