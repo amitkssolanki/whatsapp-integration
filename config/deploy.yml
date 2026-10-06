@@ -1,0 +1,92 @@
+# Kamal 2 deployment: one VPS, kamal-proxy (automatic Let's Encrypt), one PostgreSQL
+# accessory on the same host. Nothing here is a secret; see .kamal/secrets and
+# docs/deploy/RUNBOOK.md. Do not run `kamal setup` until the RUNBOOK prerequisites are met.
+<%
+  # Single source of truth for the two values Amit must replace.
+  app_host  = "whatsapp-demo.example.com" # stable subdomain, DNS A record -> server_ip (DNS-only)
+  server_ip = "203.0.113.10"              # the VPS public IPv4 (placeholder from TEST-NET-3)
+%>
+service: whatsapp-integration
+image: amitkssolanki/whatsapp-integration
+
+servers:
+  web:
+    - <%= server_ip %>
+
+proxy:
+  ssl: true
+  host: <%= app_host %>
+  app_port: 80 # Thruster listens on 80 inside the container
+  healthcheck:
+    path: /up
+    interval: 3
+    timeout: 5
+
+registry:
+  server: ghcr.io
+  username: amitkssolanki
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+# The VPS is amd64. Building on an Apple Silicon Mac cross-builds under QEMU (slow, works).
+builder:
+  arch: amd64
+
+env:
+  clear:
+    APP_HOST: <%= app_host %>
+    SOLID_QUEUE_IN_PUMA: "1" # Solid Queue supervisor runs inside Puma; no separate job container
+    DB_HOST: whatsapp-integration-db # Kamal names accessories <service>-<accessory>
+    RAILS_LOG_LEVEL: info
+    WEB_CONCURRENCY: "1"
+    JOB_CONCURRENCY: "1"
+    # Puma threads and the Active Record pool share this value. Puma plus the Solid Queue
+    # workers and dispatcher live in one process and all need connections.
+    RAILS_MAX_THREADS: "10"
+  secret:
+    - SECRET_KEY_BASE
+    - WHATSAPP_INTEGRATION_DATABASE_PASSWORD
+    - WHATSAPP_TOKEN
+    - WHATSAPP_PHONE_NUMBER_ID
+    - WHATSAPP_BUSINESS_ACCOUNT_ID
+    - WHATSAPP_VERIFY_TOKEN
+    - WHATSAPP_APP_SECRET
+    - CATALOG_ID
+    - ADMIN_USER
+    - ADMIN_PASSWORD
+
+# JSON logs go to stdout; Docker rotates them (5 x 10 MB per container, app and Postgres).
+logging:
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+# Keep the previous release's assets so in-flight pages do not 404 during a deploy.
+asset_path: /rails/public/assets
+
+deploy_timeout: 60
+drain_timeout: 30
+
+accessories:
+  db:
+    image: postgres:17
+    host: <%= server_ip %>
+    # No `port:` on purpose: PostgreSQL is reachable only on the Docker network, as
+    # whatsapp-integration-db:5432, never from the internet. Backups use `docker exec`.
+    env:
+      clear:
+        POSTGRES_USER: whatsapp_integration
+        POSTGRES_DB: whatsapp_integration_production
+      secret:
+        - POSTGRES_PASSWORD
+    volumes:
+      - whatsapp-integration-db-data:/var/lib/postgresql/data
+    options:
+      restart: unless-stopped # the top-level `logging:` also applies to this container
+
+aliases:
+  console: app exec --interactive --reuse "bin/rails console"
+  shell: app exec --interactive --reuse "bash"
+  logs: app logs -f
+  dbc: app exec --interactive --reuse "bin/rails dbconsole"
