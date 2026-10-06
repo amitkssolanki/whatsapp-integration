@@ -17,4 +17,7 @@ Rails.application.config.whatsapp = ActiveSupport::OrderedOptions.new.tap do |c|
   # HTTP Basic credentials for the operator UI.
   c.admin_user = ENV["ADMIN_USER"]
   c.admin_password = ENV["ADMIN_PASSWORD"]
+
+  # Mask phone numbers and customer names in every admin view (docs/v2/DESIGN.md §11).
+  c.mask_pii = ENV["DEMO_MASK_PII"] == "1"
 end
