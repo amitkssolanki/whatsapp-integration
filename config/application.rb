@@ -39,6 +39,18 @@ module WhatsappIntegration
     # Don't generate system test files.
     config.generators.system_tests = nil
 
+    # The webhook guard is middleware, so it has to be loadable while the
+    # middleware stack is built, before the reloader would normally be ready.
+    # Loading it once (never reloaded) is what Rack expects of middleware.
+    config.autoload_once_paths << root.join("app/middleware").to_s
+
+    # Reject oversized or unsigned webhook POSTs before Rails reads the body
+    # (see WebhookGuard). It must sit before Rack::MethodOverride, which parses
+    # form-encoded POST bodies to look for `_method`.
+    initializer "webhook_guard.middleware", before: :build_middleware_stack do |app|
+      app.config.middleware.insert_before Rack::MethodOverride, WebhookGuard
+    end
+
     # Single-database Solid Queue (see db/migrate/*_create_solid_queue_tables.rb).
     config.active_job.queue_adapter = :solid_queue
   end
