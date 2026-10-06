@@ -10,5 +10,14 @@ production: &recurring
     class: StallSweeperJob
     schedule: every 5 minutes
 
+  # Read-only catalog drift check against Meta (see CatalogReconcileJob and
+  # docs/v2/CATALOG.md). It records a report and never corrects anything. The
+  # scheduled run does nothing unless CATALOG_SYNC_ENABLED=true, so merging it
+  # into development below is harmless; to run it by hand in development use
+  #   bin/rails runner 'CatalogReconcileJob.perform_now(by: "console")'
+  catalog_reconcile:
+    class: CatalogReconcileJob
+    schedule: every day at 3am
+
 development:
   <<: *recurring
