@@ -54,6 +54,11 @@ module Whatsapp
     RETRYABLE = %w[rate_limited transient_platform transient_network].freeze
 
     UNCLASSIFIED = "unclassified".freeze
+
+    # The recipient is a synthetic (demo) customer: SendMessageJob refuses to
+    # send to it and Meta is never called. Not retryable and not resendable (it
+    # would be refused again); there is no Meta code for it.
+    SYNTHETIC_RECIPIENT = "synthetic_recipient".freeze
     AMBIGUOUS = "ambiguous".freeze
 
     # Exceptions that, wrapped in Faraday::ConnectionFailed, prove the request

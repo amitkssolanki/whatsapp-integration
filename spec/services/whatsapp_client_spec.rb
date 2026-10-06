@@ -141,6 +141,24 @@ RSpec.describe WhatsappClient do
       expect(graph.calls).to eq(0)
     end
 
+    it "returns an auth_config error, without any HTTP call, when the phone number id is missing or not all digits" do
+      [ nil, "", "  ", "12345 6789", "1234/messages", "100000000000003\n", "abc", "1e9", "https://graph.facebook.com/1", "../1" ].each do |bad|
+        Rails.application.config.whatsapp.phone_number_id = bad
+
+        expect(send_it).to have_attributes(success?: false, category: "auth_config", retryable: false, ambiguous: false,
+                                           title: "phone number id missing or malformed", http_status: nil), bad.inspect
+      end
+      expect(graph.calls).to eq(0)
+    end
+
+    it "still sends with a numeric phone number id" do
+      graph.reply(200, ok_send("wamid.OK-DIGITS"))
+      Rails.application.config.whatsapp.phone_number_id = "100000000000003"
+
+      expect(send_it).to have_attributes(success?: true)
+      expect(graph.calls).to eq(1)
+    end
+
     it "returns request_invalid without an HTTP call for an unknown or incomplete request, or an unaddressable customer" do
       expect(send_it(request: { "type" => "carousel" })).to have_attributes(category: "request_invalid")
       expect(send_it(request: { "type" => "catalog_message", "body" => "x" })).to have_attributes(category: "request_invalid")

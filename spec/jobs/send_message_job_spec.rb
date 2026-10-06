@@ -395,6 +395,74 @@ RSpec.describe SendMessageJob, type: :job do
     end
   end
 
+  describe "a synthetic recipient" do
+    let(:customer) { Customer.create!(whatsapp_number: "15550102001", display_name: "Demo Customer 1", synthetic: true).tap(&:create_conversation!) }
+
+    it "is never sent: failed with synthetic_recipient, zero HTTP, logged, and not retryable or resendable" do
+      message = outbound
+      log = capture_log { perform(message) }
+
+      expect(graph.calls).to eq(0)
+      expect(message.reload).to have_attributes(status: "failed", error_category: "synthetic_recipient", attempts: 1, failed_at: now, wa_message_id: nil)
+      expect(log).to include("event=send.synthetic_refused", "message_id=#{message.id}")
+      expect(retry_jobs).to be_empty
+      expect(message.resend!(by: "operator")).to have_attributes(ok?: false, reason: /synthetic_recipient failure cannot be resent/)
+      expect(Message.resend_failed!(category: "synthetic_recipient", by: "operator")).to have_attributes(ok?: false)
+    end
+
+    it "is refused even with valid credentials, an open window and a retry_scheduled message" do
+      message = outbound(status: :retry_scheduled, attempts: 1, next_attempt_at: now)
+
+      perform(message)
+
+      expect(graph.calls).to eq(0)
+      expect(message.reload).to have_attributes(status: "failed", error_category: "synthetic_recipient")
+    end
+
+    it "is refused even when the window is closed (it is not reported as a window block)" do
+      open_window(conversation, at: now - 3.days)
+      message = outbound
+
+      perform(message)
+
+      expect(message.reload).to have_attributes(status: "failed", error_category: "synthetic_recipient")
+    end
+
+    it "is allowed only inside an active Demo::Sandbox, where the send goes to the in-process fake" do
+      message = outbound
+      meta = Demo::FakeMeta.new
+
+      Demo::Sandbox.run(meta: meta, queue: Demo::InlineQueue.new) { perform(message) }
+
+      expect(graph.calls).to eq(0)
+      expect(meta.calls).to eq(1)
+      expect(message.reload).to have_attributes(status: "accepted", wa_message_id: "sim.out.1")
+    end
+
+    it "is refused again inside a sandbox whose isolation was broken" do
+      message = outbound
+
+      Demo::Sandbox.run(meta: Demo::FakeMeta.new, queue: Demo::InlineQueue.new) do
+        WhatsappClient.adapter = graph.adapter
+        perform(message)
+      end
+
+      expect(graph.calls).to eq(0)
+      expect(message.reload).to have_attributes(status: "failed", error_category: "synthetic_recipient")
+    end
+
+    it "does not affect sends to a real customer" do
+      real = create_customer(number: "15550100077")
+      open_window(real.conversation, at: now - 1.hour)
+      message = create_outbound(customer: real)
+      graph.reply(200, ok_send("wamid.REAL"))
+
+      perform(message)
+
+      expect(message.reload).to have_attributes(status: "accepted", wa_message_id: "wamid.REAL")
+    end
+  end
+
   describe "ambiguous outcomes" do
     it "does not stamp unknown_at for sends that settle any other way" do
       message = outbound

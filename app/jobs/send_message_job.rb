@@ -44,6 +44,7 @@ class SendMessageJob < ApplicationJob
     return skip(message_id, "missing") unless message
     return refuse_processed(message) || skip(message.id, "not_claimable", status: message.status) unless claim(message)
 
+    return refuse_synthetic(message) if synthetic_recipient?(message)
     return unless window_allows?(message)
 
     result = deliver(message)
@@ -67,6 +68,22 @@ class SendMessageJob < ApplicationJob
     AppLog.event("send.claim_refused_already_processed", job_id: job_id, message_id: message.id,
                                                           status: message.status, has_wa_message_id: message.wa_message_id.present?)
     true
+  end
+
+  # A synthetic (demo) customer is never a real WhatsApp user: nothing may be
+  # sent to it. The only exception is inside Demo::Sandbox, where every send
+  # goes to an in-process fake and cannot leave the process.
+  def synthetic_recipient?(message)
+    message.conversation.customer.synthetic? && !Demo::Sandbox.active?
+  end
+
+  def refuse_synthetic(message)
+    failed = message.transition!(
+      :failed,
+      failed_at: Time.current, error_category: Whatsapp::ErrorClassifier::SYNTHETIC_RECIPIENT,
+      error_title: "Synthetic recipient", error_details: "The recipient is a synthetic (demo) customer; not sent to Meta."
+    )
+    AppLog.event("send.synthetic_refused", job_id: job_id, message_id: message.id) if failed
   end
 
   # Returns false (after blocking the message) when the window is closed.
