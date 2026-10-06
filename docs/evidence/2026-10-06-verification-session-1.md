@@ -63,6 +63,22 @@ it. Message #30 keeps its original classification as the historical record.
 - **Status webhooks carry business-scoped user ids and per-message pricing.**
 - **Catalog read-back price format** is a display string, e.g. `"$5.00"`.
 
+## Deployment checks on the live host, the same day
+
+Run against https://whatsapp.railsfanatics.com before and around the session (by the
+operator, not by Meta):
+
+- HTTPS with a Let's Encrypt certificate; `/up` 200; HTTP redirected to HTTPS.
+- Webhook endpoint: wrong verify token 403; POST without a signature 401; POST with a
+  forged signature 401; a 4 MB body 413 (refused before Rails); `/webhooks/whatsapp.json` 404.
+- Admin without or with wrong credentials 401; with the operator's credentials every
+  admin page 200.
+- Background jobs: a harmless job processed; a deliberately unloadable job recorded as a
+  failed execution and then discarded; after a container restart the app was healthy again
+  in about 6 seconds with jobs processing and data intact.
+- Backups: one `pg_dump` taken; a non-destructive restore drill into a scratch database
+  matched production row counts and schema version; the scratch database was dropped.
+
 ## Found and fixed afterwards
 
 - 131009 classification (above).

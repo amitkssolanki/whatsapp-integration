@@ -25,7 +25,7 @@ def get(path, params, token)
   [ response.status, body ]
 end
 
-# Digits only, so "+91 0000000000" masks to •••••••2702 (masking the formatted
+# Digits only, so "+1 555 010 1234" masks to •••••••1234 (masking the formatted
 # string left most digits visible: each group shorter than 5 digits kept them).
 def mask(number)
   d = number.to_s.gsub(/\D/, "")

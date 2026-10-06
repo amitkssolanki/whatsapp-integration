@@ -46,7 +46,7 @@ participant (the author), live Meta traffic to the deployed app.
 | Deployment, backups | Deployed | Kamal on a shared VPS; one backup taken and a non-destructive restore drill passed (2026-10-06) |
 | Operating period | **Not started** | Criteria in [`docs/operating/PROTOCOL.md`](docs/operating/PROTOCOL.md): 14+ days, 2+ participants besides the author, every scenario twice |
 
-Observed on `main` at the time of writing: `bundle exec rspec` reports 1020 examples, 0 failures
+Observed on `main` at the time of writing: `bundle exec rspec` reports 1111 examples, 0 failures
 (local PostgreSQL, about 17 seconds). Specs verify the code against the
 fixtures and stubs described above; they say nothing about how Meta behaves.
 
@@ -395,8 +395,8 @@ tooling its scenarios need (fault injection switch, `ops:repost_delivery`,
   accounts or roles. `by:` records the shared username.
 - No template messages. A closed 24h window blocks sends; a template fallback
   would need a Meta-approved utility template and is not implemented.
-- Not deployed; one host, one database volume, no staging environment, no
-  high availability.
+- One shared host, one database volume, no staging environment, no high
+  availability.
 - Behaviors that need Meta to settle, listed in
   [docs/v2/meta-research.md](docs/v2/meta-research.md) and
   [docs/v2/CATALOG.md](docs/v2/CATALOG.md), include: whether 131047 arrives

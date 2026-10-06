@@ -25,7 +25,7 @@ binstub), with the secrets exported (below).
 | VPS | A shared Linux VPS (amd64) already running Docker and kamal-proxy for other apps (`kamal setup` skips installing Docker). Your SSH key on `root`. Its address is `DEPLOY_SERVER_IP` in the secrets file. |
 | DNS | A record `HOST -> IP`, **DNS-only (grey cloud) on Cloudflare**. Proxied (orange) breaks the Let's Encrypt challenge that kamal-proxy performs. Check: `dig +short HOST` returns the VPS IP. |
 | GHCR token | Taken from the `gh` CLI login at source time (`gh auth token`, needs `write:packages`), as for the other apps on this host. Kamal also logs the VPS into ghcr.io with it. |
-| Config edit | Set the real `app_host` and `server_ip` in `config/deploy.yml`, commit. Kamal builds from the committed HEAD and refuses a dirty tree. |
+| Config edit | `app_host` is set in `config/deploy.yml` (commit any change: Kamal builds from the committed HEAD and refuses a dirty tree). The server address is **not** committed: it is `DEPLOY_SERVER_IP` in the secrets file. |
 | Secrets | See below. |
 
 ### Secrets
@@ -225,7 +225,7 @@ undelivered webhooks for a while; anything older is lost, and the Health page an
 list show what the restored database does contain. Send-side rows (`unknown`, `pending`) from
 before the dump are recovered by the stall sweeper and Meta's status webhooks, never resent blindly.
 
-New VPS after total loss: provision, update `server_ip` and DNS, `kamal setup`, `scp` the
+New VPS after total loss: provision, update `DEPLOY_SERVER_IP` in the secrets file and DNS, `kamal setup`, `scp` the
 latest off-host dump to the VPS, then follow the four steps above (the fresh database created by
 `kamal setup` is the "live" one that gets replaced).
 

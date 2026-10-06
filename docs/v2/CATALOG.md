@@ -96,12 +96,15 @@ with an unpushed local change is tagged `pending_push` and not counted by
 `Catalog::PriceParser` accepts `15.50 USD`, `USD 15.50`, `USD15.50`, `$15.50`, `1,550.00`,
 `15,50 EUR`, minor-unit integers and digit strings (with the `currency` field), and
 returns nil for anything ambiguous or finer than a cent (reported as `price_unparseable`).
-A digit string without a decimal point or currency marker is read as **minor units**, which
-is a guess until the live read-back confirms the format.
+A digit string without a decimal point or currency marker is read as **minor units**, a
+guess. The live read-back on 2026-10-06 (`script/meta/check_state.rb`, read-only) returned
+a display string, `"$5.00"`, which the parser handles.
 
-## Verified only against documentation (no live calls)
+## Verified only against documentation (no live push yet)
 
-All of this was built and tested without touching Meta. The specs use Faraday's in-memory
+The push and reconcile code was built and tested without touching Meta. Since then only
+read access has been checked live (2026-10-06: `catalog_management` read works, 20 products,
+price format `"$5.00"`); no batch has been pushed. The specs use Faraday's in-memory
 test adapter only. Verified against docs and nothing else:
 
 - `POST /{catalog_id}/items_batch`: `item_type=PRODUCT_ITEM`, `allow_upsert`, JSON `requests`,
@@ -117,9 +120,9 @@ and that a non-`finished` status string means "keep waiting".
 
 ## Live checks still required (do these once, with a test catalog)
 
-1. **Price format returned by read-back.** Run `CatalogReconcileJob.perform_now(by: "console")`
-   after one push and inspect the `price`/`currency` in the raw response. If `price_unparseable`
-   appears, only `Catalog::PriceParser` and its spec need to change.
+1. **Price format returned by read-back.** Seen once on 2026-10-06 as `"$5.00"` (a read, not
+   after a push). Still worth inspecting the raw response of the first real reconcile after a
+   push; if `price_unparseable` appears, only `Catalog::PriceParser` and its spec change.
 2. **Preorder mapping.** Push a preorder product and confirm Meta accepts `out of stock` and
    shows it as out of stock (and whether `available for order` would be accepted and better).
 3. **Review latency and statuses.** Time from `finished` to `review_status: approved`, whether
