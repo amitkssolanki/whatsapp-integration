@@ -12,6 +12,32 @@ RSpec.describe AdminHelper, type: :helper do
     end
   end
 
+  describe "#ago" do
+    let(:now) { Time.utc(2026, 10, 6, 12, 0, 0) }
+
+    it "reads in words, never as a count of hours" do
+      expect(helper.ago(now - 20.seconds, now: now)).to include(">less than a minute ago<")
+      expect(helper.ago(now - 45.minutes, now: now)).to include(">about 1 hour ago<")
+      expect(helper.ago(now - 1.day, now: now)).to include(">1 day ago<")
+      expect(helper.ago(now - 1406.hours - 14.minutes, now: now)).to include(">about 2 months ago<")
+      expect(helper.ago(now - 1406.hours, now: now)).not_to match(/\d+h \d+m/)
+    end
+
+    it "keeps the absolute timestamp in a title attribute" do
+      html = helper.ago(Time.utc(2026, 8, 9, 5, 45, 30), now: now)
+
+      expect(html).to include('title="2026-08-09 05:45:30 UTC"')
+    end
+
+    it "is a dash for a missing time" do
+      expect(helper.ago(nil)).to eq("—")
+    end
+
+    it "defaults to the current time" do
+      travel_to(now) { expect(helper.ago(now - 3.days)).to include(">3 days ago<") }
+    end
+  end
+
   describe "#message_state" do
     it "renders every status with its tick and label" do
       expected = {
