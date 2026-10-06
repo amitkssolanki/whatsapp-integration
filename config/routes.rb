@@ -29,6 +29,13 @@ Rails.application.routes.draw do
         post :reject
       end
     end
+    resources :messages, only: [] do
+      member do
+        post :resend
+        post :requeue
+        post :override_window
+      end
+    end
     resources :products, only: [ :index ]
   end
 end

@@ -3,7 +3,7 @@
 <% else %>
   <table>
     <thead>
-      <tr><th>Message</th><th>Purpose</th><th>State</th><th>Queued</th><th>Accepted</th><th>Sent</th><th>Delivered</th><th>Read</th><th>Failed / blocked</th></tr>
+      <tr><th>Message</th><th>Purpose</th><th>State</th><th>Queued</th><th>Accepted</th><th>Sent</th><th>Delivered</th><th>Read</th><th>Failed / blocked</th><th></th></tr>
     </thead>
     <tbody>
       <% messages.each do |message| %>
@@ -17,9 +17,10 @@
           <td class="nowrap"><%= admin_time(message.delivered_at, seconds: true) %></td>
           <td class="nowrap"><%= admin_time(message.read_at, seconds: true) %></td>
           <td class="nowrap"><%= admin_time(message.failed_at || message.blocked_at, seconds: true) %></td>
+          <td><%= render "admin/messages/actions", message: message %></td>
         </tr>
         <% if message.error_details.present? %>
-          <tr><td></td><td colspan="8" class="muted pre"><%= scrub_ids(message.error_details) %></td></tr>
+          <tr><td></td><td colspan="9" class="muted pre"><%= scrub_ids(message.error_details) %></td></tr>
         <% end %>
       <% end %>
     </tbody>

@@ -1,0 +1,16 @@
+<%# Per-message operator actions; each shows only when the model would accept it. %>
+<% if message.failed? && Message::RESENDABLE_ERROR_CATEGORIES.include?(message.error_category) %>
+  <%= button_to "Resend", resend_admin_message_path(message), method: :post, class: "btn", form_class: "inline" %>
+<% end %>
+<% if message.blocked? %>
+  <% if message.conversation.window_open? %>
+    <%= button_to "Requeue", requeue_admin_message_path(message), method: :post, class: "btn btn-primary", form_class: "inline" %>
+  <% end %>
+  <%= form_with url: override_window_admin_message_path(message), method: :post, class: "experiment" do |f| %>
+    <label>
+      <%= check_box_tag :confirm, "1", false, id: "confirm_#{message.id}" %>
+      I understand this sends outside the 24h window as a deliberate test
+    </label>
+    <%= f.submit "Override window (experiment)", class: "btn btn-warn" %>
+  <% end %>
+<% end %>

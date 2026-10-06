@@ -1,21 +1,39 @@
-<% content_for :title, "Admin · #{@conversation.customer.whatsapp_number}" %>
-  <p><%= link_to "← All conversations", admin_conversations_path, class: "muted" %></p>
-  <h1><%= @conversation.customer.display_name.presence || @conversation.customer.whatsapp_number %></h1>
-  <p class="muted"><%= @conversation.customer.whatsapp_number %></p>
+<% content_for :title, "Admin · Conversation with #{display_name(@conversation.customer)}" %>
+<%# The override form holds a checkbox someone may be ticking; do not reload under them. %>
+<% live_refresh unless @messages.any?(&:blocked?) %>
+<p><%= link_to "← All conversations", admin_conversations_path, class: "muted" %></p>
+<h1><%= display_name(@conversation.customer) %></h1>
+<p class="muted"><%= display_phone(@conversation.customer) %>
+  <% if @orders.any? %>· orders:
+    <% @orders.each do |order| %><%= link_to "##{order.id}", admin_order_path(order) %> <% end %>
+  <% end %>
+</p>
+<p><%= window_badge(@conversation) %> <strong><%= window_header(@conversation) %></strong></p>
+<% if @conversation.last_inbound_at %>
+  <p class="muted">Last message from the customer: <%= admin_time(@conversation.last_inbound_at, seconds: true) %></p>
+<% end %>
 
-  <div class="card">
-    <% if @messages.empty? %>
-      <p class="muted">No messages yet.</p>
-    <% else %>
-      <% @messages.each do |message| %>
-        <div class="msg-row <%= message.direction %>">
-          <div class="msg-meta">
-            <%= message.direction == "inbound" ? "← customer" : "→ bot" %>
-            · <%= message.message_type %>
-            · <%= message.created_at.strftime("%b %-d, %H:%M:%S") %>
-          </div>
-          <div><%= message.body.presence || "(no text body — #{message.message_type} payload)" %></div>
+<div class="card timeline">
+  <% if @messages.empty? %>
+    <p class="muted">No messages yet.</p>
+  <% else %>
+    <% @messages.each do |message| %>
+      <div class="msg-row <%= message.direction %>" id="message-<%= message.id %>">
+        <div class="msg-meta">
+          <%= message.inbound? ? "← customer" : "→ us" %>
+          · <%= message.purpose.present? ? message.purpose.tr("_", " ") : message.message_type %>
+          · <%= admin_time(message.created_at, seconds: true) %>
+          · message #<%= message.id %>
+          <% if message.order_id %>· <%= link_to "order ##{message.order_id}", admin_order_path(message.order_id) %><% end %>
         </div>
-      <% end %>
+        <div class="msg-body"><%= scrub_ids(message.body).presence || "(no text body — #{message.message_type} payload)" %></div>
+        <% if message.outbound? %>
+          <div><%= message_state(message) %></div>
+          <% if message.error_details.present? %><div class="muted pre"><%= scrub_ids(message.error_details) %></div><% end %>
+          <% if message.guard_override_by.present? %><div class="muted">Window override requested by <%= message.guard_override_by %></div><% end %>
+          <div class="msg-actions"><%= render "admin/messages/actions", message: message %></div>
+        <% end %>
+      </div>
     <% end %>
-  </div>
+  <% end %>
+</div>
