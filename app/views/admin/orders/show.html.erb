@@ -1,6 +1,4 @@
 <% content_for :title, "Admin · Order ##{@order.id}" %>
-<%= render "admin/nav" %>
-<div class="wrap">
   <p><%= link_to "← All orders", admin_orders_path, class: "muted" %></p>
   <h1>Order #<%= @order.id %></h1>
   <p class="muted">
@@ -28,4 +26,3 @@
       <p class="muted">Note from customer: “<%= @order.wa_order_note %>”</p>
     <% end %>
   </div>
-</div>

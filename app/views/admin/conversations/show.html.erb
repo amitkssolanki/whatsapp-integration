@@ -1,6 +1,4 @@
 <% content_for :title, "Admin · #{@conversation.customer.whatsapp_number}" %>
-<%= render "admin/nav" %>
-<div class="wrap">
   <p><%= link_to "← All conversations", admin_conversations_path, class: "muted" %></p>
   <h1><%= @conversation.customer.display_name.presence || @conversation.customer.whatsapp_number %></h1>
   <p class="muted"><%= @conversation.customer.whatsapp_number %></p>
@@ -21,4 +19,3 @@
       <% end %>
     <% end %>
   </div>
-</div>

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><%= content_for(:title) || "Admin · The Local Table" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= yield :head %>
+    <link rel="icon" href="/icon.png" type="image/png">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <%= stylesheet_link_tag :app %>
+  </head>
+
+  <body class="admin">
+    <%= render "admin/nav" %>
+    <main class="wrap">
+      <% flash.each do |kind, message| %>
+        <div class="flash flash-<%= kind %>" role="status"><%= message %></div>
+      <% end %>
+      <%= yield %>
+    </main>
+    <footer class="admin-footer">
+      <span>Signed in as <%= current_operator %></span>
+      <% if live_refresh? %>
+        <span>· refreshing every <%= AdminHelper::REFRESH_SECONDS %>s (<%= link_to "pause", url_for(request.query_parameters.merge("live" => "0")) %>)</span>
+      <% elsif live_refresh_paused? %>
+        <span>· refresh paused (<%= link_to "resume", url_for(request.query_parameters.except("live")) %>)</span>
+      <% end %>
+      <% if pii_masked? %><strong class="pii-flag">PII masked</strong><% end %>
+    </footer>
+  </body>
+</html>

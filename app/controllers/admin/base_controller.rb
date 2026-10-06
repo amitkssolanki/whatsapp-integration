@@ -6,6 +6,8 @@ module Admin
   class BaseController < ApplicationController
     AUTH_DISABLED_OPERATOR = "dev-operator".freeze
 
+    layout "admin"
+
     protect_from_forgery with: :exception
 
     before_action :authenticate_operator!
