@@ -67,6 +67,15 @@ class Message < ApplicationRecord
     outbound.where(status: %w[accepted sent]).where(delivered_at: nil).where(accepted_at: ...10.minutes.ago)
   }
 
+  # Leaving `sending` is the moment the stamped timestamps become meaningful:
+  # statuses that arrived while the send was still in flight could only leave
+  # their timestamp behind. After the send settles (accepted, or unknown after
+  # a read timeout or a stall) the state catches up to the furthest step Meta
+  # has reported, so proof of delivery is never stranded behind `unknown`.
+  def transition!(to, **attrs)
+    super.tap { |moved| catch_up_lifecycle! if moved && %w[accepted unknown].include?(to.to_s) }
+  end
+
   # Records a lifecycle event (accepted/sent/delivered/read) and moves the state
   # forward if, and only if, that is progress. Returns true when anything
   # changed, false when the event was already known.
@@ -171,6 +180,18 @@ class Message < ApplicationRecord
 
   private
 
+  # Moves forward to the furthest lifecycle step that has a timestamp, if that is
+  # progress. Never while `sending` (the sender has not recorded its outcome yet)
+  # and never backwards. Returns true when the state moved.
+  def catch_up_lifecycle!
+    return false if sending?
+
+    target = LIFECYCLE.reverse.find { |step| self[LIFECYCLE_COLUMNS.fetch(step)] }
+    return false unless target && lifecycle_rank(target) > lifecycle_rank(status)
+
+    transition!(target)
+  end
+
   def require_actor!(by)
     raise ArgumentError, "by: is required" if by.blank?
   end
@@ -192,12 +213,7 @@ class Message < ApplicationRecord
     moved = false
     moved = transition!(:accepted) if sending? && event == "accepted"
 
-    target = LIFECYCLE.reverse.find { |step| self[LIFECYCLE_COLUMNS.fetch(step)] }
-    if target && target != status && lifecycle_rank(target) > lifecycle_rank(status) && !sending?
-      moved = transition!(target) || moved
-    end
-
-    moved
+    catch_up_lifecycle! || moved
   end
 
   def lifecycle_rank(step)

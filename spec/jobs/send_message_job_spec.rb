@@ -358,6 +358,55 @@ RSpec.describe SendMessageJob, type: :job do
       expect(retry_jobs).to be_empty
     end
 
+    describe "proof of delivery that arrived while the send was in flight" do
+      def status_during_send(message, name:, wamid: "wamid.FAKE-EARLY", at: now + 1.second)
+        body = fixture_json(name).tap do |json|
+          status = json.dig("entry", 0, "changes", 0, "value", "statuses", 0)
+          status["id"] = wamid
+          status["biz_opaque_callback_data"] = message.id.to_s
+          status["timestamp"] = at.to_i.to_s
+        end.to_json
+        deliver_and_process(body)
+      end
+
+      it "ends at the furthest stamped state after a read timeout instead of stranding at unknown" do
+        message = outbound
+        graph.fail_with(Faraday::TimeoutError.new(Net::ReadTimeout.new)) do
+          status_during_send(message, name: "status_sent", at: now + 1.second)
+          status_during_send(message, name: "status_delivered", at: now + 2.seconds)
+          status_during_send(message, name: "status_read", at: now + 3.seconds)
+        end
+
+        perform(message)
+
+        expect(message.reload).to have_attributes(status: "read", wa_message_id: "wamid.FAKE-EARLY", sent_at: now + 1.second, read_at: now + 3.seconds)
+        expect(graph.calls).to eq(1)
+        expect(retry_jobs).to be_empty
+      end
+
+      it "ends at `sent` after a connection reset when only the sent status overtook" do
+        message = outbound
+        graph.fail_with(Faraday::ConnectionFailed.new(Errno::ECONNRESET.new)) { status_during_send(message, name: "status_sent") }
+
+        perform(message)
+
+        expect(message.reload.status).to eq("sent")
+      end
+
+      it "ends at the furthest stamped state when the stall sweeper, not the job, marks it unknown" do
+        message = outbound
+        graph.fail_with(NoMethodError.new("worker died")) { status_during_send(message, name: "status_delivered", at: now + 2.seconds) }
+        expect { perform(message) }.to raise_error(NoMethodError)
+        expect(message.reload).to be_sending
+        expect(message.delivered_at).to be_present
+
+        travel_to(now + 6.minutes)
+        StallSweeperJob.perform_now
+
+        expect(message.reload.status).to eq("delivered")
+      end
+    end
+
     it "is resolved by a later status webhook correlated through our id" do
       message = outbound
       graph.fail_with(Faraday::TimeoutError.new(Net::ReadTimeout.new))
