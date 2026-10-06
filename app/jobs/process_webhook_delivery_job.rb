@@ -64,7 +64,7 @@ class ProcessWebhookDeliveryJob < ApplicationJob
   end
 
   def final_status(outcome)
-    return :ignored if outcome.results.empty?
+    return :ignored if outcome.results.empty? || outcome.results.all? { |result| result.result == "ignored" && result.detail == Webhooks::DeliveryProcessor::FOREIGN_NUMBER }
     return :processed if outcome.errors.zero?
 
     outcome.errors == outcome.results.size ? :failed : :partially_failed

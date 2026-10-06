@@ -35,7 +35,7 @@ module Webhooks
         request_id: @request_id,
         received_at: Time.current,
         object_type: payload&.object_type,
-        phone_number_id: payload&.phone_number_id,
+        phone_number_id: payload&.phone_number_id(preferring: @config.phone_number_id),
         item_counts: payload ? payload.item_counts : {}
       }.merge(disposition(payload))
     end
@@ -43,13 +43,9 @@ module Webhooks
     def disposition(payload)
       return { status: :unparseable, outcome: { "reason" => "invalid_json" } } if payload.nil?
       return { status: :ignored, outcome: { "reason" => "unexpected_object" } } unless payload.expected_object?
-      return { status: :ignored, outcome: { "reason" => "phone_number_mismatch" } } if foreign_phone_number?(payload)
+      return { status: :ignored, outcome: { "reason" => "phone_number_mismatch" } } if payload.all_foreign?(@config.phone_number_id)
 
       { status: :received }
-    end
-
-    def foreign_phone_number?(payload)
-      @config.phone_number_id.present? && payload.phone_number_id != @config.phone_number_id.to_s
     end
 
     # Valid JSON is always valid UTF-8 without NUL bytes, so only an unparseable
