@@ -23,7 +23,7 @@ class CatalogReconcileJob < ApplicationJob
 
     remote = response.data.select { |item| item.is_a?(Hash) }
     reconciler = Catalog::Reconciler.new(
-      products: Product.all.to_a, remote_items: remote, pending_skus: Product.catalog_dirty.pluck(:sku)
+      products: Product.non_synthetic.to_a, remote_items: remote, pending_skus: Product.catalog_dirty.pluck(:sku)
     )
     drift = reconciler.drift
     run.finish("succeeded", result: { drift: drift, checked: reconciler.checked, remote_count: remote.size })
