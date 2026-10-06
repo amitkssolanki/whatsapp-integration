@@ -18,11 +18,46 @@ class Order < ApplicationRecord
 
   validates :total_cents, numericality: { greater_than_or_equal_to: 0 }
 
+  # Operator decisions (docs/v2/DESIGN.md §3, §4). Each one moves the order and
+  # queues the customer's notification in one transaction; the notification's
+  # idempotency key makes a double click (or two operators) a harmless no-op.
+  # Both return an ActionResult; a refusal is never an exception.
+  def accept!(by:)
+    decide!(:accepted, by: by, rejection_reason: nil) { Conversations::Responder.new.order_accepted(order: self) }
+  end
+
+  def reject!(by:, reason:)
+    return ActionResult.refused("a reason is required") if reason.blank?
+
+    decide!(:rejected, by: by, rejection_reason: reason.to_s.strip) { Conversations::Responder.new.order_rejected(order: self) }
+  end
+
   def total
     total_cents / 100.0
   end
 
   def formatted_total
     format("$%.2f", total)
+  end
+
+  private
+
+  def decide!(to, by:, **attrs)
+    raise ArgumentError, "by: is required" if by.blank?
+
+    queued = nil
+    moved = transaction do
+      transition!(to, decided_at: Time.current, decided_by: by, **attrs).tap do |ok|
+        next unless ok
+
+        conversation = customer.conversation || customer.create_conversation!
+        queued = Messages::Outbox.queue(conversation: conversation, reply: yield, order_id: id)
+      end
+    end
+
+    return ActionResult.refused("order is already #{status}") unless moved
+
+    AppLog.event("order.#{to}", order_id: id, by: by, notification_message_id: queued)
+    ActionResult.ok
   end
 end

@@ -32,13 +32,32 @@ module Conversations
     end
 
     # The automatic receipt is neutral on purpose: the order may still need
-    # review, so it states no total. Acceptance (a later phase) states the total.
+    # review, so it states no total and promises nothing. Acceptance states the
+    # final total (see #order_accepted).
     def order_received(order:)
       count = order.order_items.sum(:quantity)
       body = "Thanks! We've received your order ##{order.id} (#{count} #{'item'.pluralize(count)}). " \
              "We'll confirm it shortly. 🎉"
 
       text_reply("order_received", "order:#{order.id}:received", body)
+    end
+
+    # Operator accepted the order: now the total is final, so now it is stated.
+    def order_accepted(order:)
+      count = order.order_items.sum(:quantity)
+      body = "Good news! Your order ##{order.id} is confirmed: #{count} #{'item'.pluralize(count)}, " \
+             "total #{order.formatted_total}. Thank you for choosing The Local Table! 🍽️"
+
+      text_reply("order_accepted", "order:#{order.id}:accepted", body)
+    end
+
+    # Deliberately does not repeat the operator's reason: it is an internal
+    # note (stock, kitchen capacity, a suspicious cart), not customer copy.
+    def order_rejected(order:)
+      body = "Sorry, we can't fulfil your order ##{order.id} right now. " \
+             "You're welcome to send a new cart, or message us here and we'll help. 🙏"
+
+      text_reply("order_rejected", "order:#{order.id}:rejected", body)
     end
 
     private

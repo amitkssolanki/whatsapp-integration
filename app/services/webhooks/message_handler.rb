@@ -72,26 +72,9 @@ module Webhooks
       )
     end
 
-    # Pending outbound row + its send job, in the same transaction. The unique
-    # idempotency key means a reprocessed inbound can never queue a second reply.
+    # Pending outbound row + its send job, in the same transaction.
     def queue_reply(conversation, reply, order_id: nil)
-      inserted = Message.insert(
-        {
-          conversation_id: conversation.id,
-          direction: :outbound,
-          status: :pending,
-          message_type: reply.message_type,
-          body: reply.body,
-          purpose: reply.purpose,
-          idempotency_key: reply.idempotency_key,
-          order_id: order_id,
-          webhook_delivery_id: @delivery.id,
-          raw_payload: { "request" => reply.request }
-        },
-        unique_by: :idempotency_key, returning: %w[id]
-      )
-      outbound_id = inserted.rows.dig(0, 0)
-      SendMessageJob.perform_later(outbound_id) if outbound_id
+      Messages::Outbox.queue(conversation: conversation, reply: reply, order_id: order_id, webhook_delivery_id: @delivery.id)
     end
 
     # GREATEST ignores NULL and never moves backwards, so out-of-order
