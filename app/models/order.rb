@@ -1,4 +1,6 @@
 class Order < ApplicationRecord
+  include StatusTransitions
+
   belongs_to :customer
   belongs_to :source_message, class_name: "Message", optional: true # nil only for legacy V1 rows
   has_many :order_items, dependent: :destroy
@@ -9,6 +11,10 @@ class Order < ApplicationRecord
 
   # An independent flag: an order can need review and still be accepted.
   enum :review_status, { clear: 0, needs_review: 1 }, default: :clear
+
+  ALLOWED_TRANSITIONS = {
+    "received" => %w[accepted rejected]
+  }.freeze
 
   validates :total_cents, numericality: { greater_than_or_equal_to: 0 }
 
