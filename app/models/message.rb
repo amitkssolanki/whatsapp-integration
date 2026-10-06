@@ -125,7 +125,7 @@ class Message < ApplicationRecord
       error_code: code,
       error_title: title,
       error_details: details,
-      error_category: Whatsapp::ErrorClassifier.category_for(code: code)
+      error_category: Whatsapp::ErrorClassifier.category_for(code: code, details: details)
     )
     moved ? :applied : (failed? ? :duplicate : :ignored)
   end

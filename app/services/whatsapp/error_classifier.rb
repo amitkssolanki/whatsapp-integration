@@ -110,17 +110,29 @@ module Whatsapp
     private_class_method :handshake_failure?
 
     # Classification for an API error: Meta's `code` (an Integer or numeric
-    # string) and, only when there is no code, the HTTP status.
-    def self.classify(code: nil, http_status: nil)
-      build(category_for(code: code, http_status: http_status))
+    # string) and, only when there is no code, the HTTP status. `details` is
+    # Meta's error_data.details, which Meta says to branch on together with
+    # the code (docs/v2/meta-research.md).
+    def self.classify(code: nil, http_status: nil, details: nil)
+      build(category_for(code: code, http_status: http_status, details: details))
     end
 
-    def self.category_for(code: nil, http_status: nil)
+    def self.category_for(code: nil, http_status: nil, details: nil)
       number = Integer(code.to_s, exception: false)
+      return "account_config" if number == 131_009 && details.to_s.match?(COMMERCE_SETTINGS_DETAILS)
       return CATEGORY_BY_CODE.fetch(number, UNCLASSIFIED) if number
 
       http_fallback(http_status.to_i)
     end
+
+    # 131009 "Parameter value is not valid" means two different things. V1 got it
+    # for a request bug (a catalog_message without a thumbnail). The first V2 live
+    # session (2026-10-06) got it because a newly registered number had the
+    # catalog switched off in its commerce settings; Meta's details then read
+    # "Check if a catalog is linked to the WhatsApp Business Account and the
+    # catalog is enabled in the WhatsApp Commerce Settings". That one is account
+    # configuration: fixable by the owner, then worth resending.
+    COMMERCE_SETTINGS_DETAILS = /commerce settings|catalog is linked|catalog is enabled/i
 
     def self.retryable?(category) = RETRYABLE.include?(category.to_s)
 

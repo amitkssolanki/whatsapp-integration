@@ -175,3 +175,16 @@ RSpec.describe Whatsapp::ErrorClassifier do
     end
   end
 end
+
+RSpec.describe Whatsapp::ErrorClassifier, "131009 details" do
+  # Both are real: V1 (Aug 2026) and the first V2 live session (2026-10-06).
+  it "keeps a request bug as request_invalid" do
+    expect(described_class.category_for(code: 131_009, details: "action['parameters'] cannot be empty.")).to eq("request_invalid")
+  end
+
+  it "files the commerce-settings failure as account configuration" do
+    details = "Check if a catalog is linked to the WhatsApp Business Account and the catalog is enabled in the WhatsApp Commerce Settings"
+    expect(described_class.category_for(code: 131_009, details: details)).to eq("account_config")
+    expect(described_class.classify(code: 131_009, details: details).retryable).to be(false)
+  end
+end

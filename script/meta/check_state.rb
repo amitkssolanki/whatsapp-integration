@@ -25,7 +25,12 @@ def get(path, params, token)
   [ response.status, body ]
 end
 
-def mask(number) = number.to_s.gsub(/\d(?=\d{4})/, "•")
+# Digits only, so "+91 0000000000" masks to •••••••2702 (masking the formatted
+# string left most digits visible: each group shorter than 5 digits kept them).
+def mask(number)
+  d = number.to_s.gsub(/\D/, "")
+  d.length > 4 ? ("•" * (d.length - 4)) + d[-4..] : d
+end
 
 def digits(number) = number.to_s.gsub(/\D/, "")
 

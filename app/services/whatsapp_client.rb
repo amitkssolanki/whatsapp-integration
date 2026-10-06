@@ -145,13 +145,14 @@ class WhatsappClient
   def from_error(response, body)
     error = body["error"].is_a?(Hash) ? body["error"] : {}
     code = Integer(error["code"].to_s, exception: false)
-    classification = Whatsapp::ErrorClassifier.classify(code: code, http_status: response.status)
+    details = error.dig("error_data", "details").presence || error["message"].presence
+    classification = Whatsapp::ErrorClassifier.classify(code: code, http_status: response.status, details: details)
 
     error_result(
       http_status: response.status,
       code: code,
       title: error["title"].presence || error["type"].presence,
-      details: error.dig("error_data", "details").presence || error["message"].presence,
+      details: details,
       category: classification.category
     )
   end
