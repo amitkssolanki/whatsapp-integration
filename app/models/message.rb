@@ -104,6 +104,16 @@ class Message < ApplicationRecord
     moved ? :applied : (failed? ? :duplicate : :ignored)
   end
 
+  # Meta says the 24h window was closed (131047) for a message we sent because
+  # our own guard thought it open: a diagnostic for the margin and clock logic,
+  # not an error. Skipped when an operator deliberately overrode the guard.
+  def log_window_disagreement(source:)
+    return if guard_override_by.present?
+
+    AppLog.warn("window_disagreement", message_id: id, conversation_id: conversation_id, source: source,
+                                       last_inbound_at: conversation.last_inbound_at&.iso8601)
+  end
+
   private
 
   def advance_lifecycle!(event)

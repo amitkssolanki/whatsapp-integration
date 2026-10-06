@@ -20,8 +20,15 @@ module Builders
       direction: :outbound,
       message_type: "text",
       body: "hello",
+      raw_payload: { "request" => { "type" => "text", "body" => "hello" } },
       status: status
     }.merge(attrs))
+  end
+
+  # The customer wrote to us at `at`: the 24-hour window runs from there.
+  def open_window(conversation, at: Time.current)
+    conversation.update!(last_inbound_at: at)
+    conversation
   end
 
   def create_order(status: :received, customer: create_customer, **attrs)
@@ -36,4 +43,8 @@ module Builders
   end
 end
 
-RSpec.configure { |config| config.include Builders }
+RSpec.configure do |config|
+  config.include Builders
+  config.include ActiveSupport::Testing::TimeHelpers
+  config.after { travel_back }
+end

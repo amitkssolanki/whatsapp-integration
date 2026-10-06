@@ -268,6 +268,42 @@ RSpec.describe "Webhook processing", type: :request do
       expect(message.error_details).to start_with("Recipient phone number not in allowed list")
     end
 
+    describe "131047 (24-hour window) arriving as a failed status" do
+      def failed_131047
+        fixture_json("status_sent").tap do |json|
+          status = json.dig("entry", 0, "changes", 0, "value", "statuses", 0)
+          status["status"] = "failed"
+          status["errors"] = [ { "code" => 131_047, "title" => "Re-engagement message" } ]
+        end.to_json
+      end
+
+      it "fails the message as window_closed and logs a window_disagreement for a message we sent" do
+        message = outbound_for("status_sent")
+
+        log = capture_log { deliver_and_process(failed_131047) }
+
+        expect(message.reload).to have_attributes(status: "failed", error_category: "window_closed", error_code: 131_047)
+        expect(log).to include("event=window_disagreement").and include("source=status_webhook").and include("message_id=#{message.id}")
+      end
+
+      it "logs the disagreement once: a duplicate delivery of the same failure is not a second event" do
+        outbound_for("status_sent")
+        deliver_and_process(failed_131047)
+
+        log = capture_log { deliver_and_process(failed_131047.sub("{", "{ ")) }
+
+        expect(log).not_to include("window_disagreement")
+      end
+
+      it "stays quiet when an operator overrode the guard on purpose" do
+        outbound_for("status_sent", guard_override_by: "amit")
+
+        log = capture_log { deliver_and_process(failed_131047) }
+
+        expect(log).not_to include("window_disagreement")
+      end
+    end
+
     it "reports failed-after-delivered as an anomaly and leaves the message delivered" do
       message = outbound_for("status_sent", status: :delivered, delivered_at: Time.utc(2026, 8, 8, 0, 0, 5))
       body = fixture_json("status_sent").tap do |json|

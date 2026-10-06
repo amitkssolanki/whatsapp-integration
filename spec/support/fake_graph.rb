@@ -20,13 +20,16 @@ class FakeGraph
     @requests = []
   end
 
-  def reply(status = 200, body = {}, headers = {})
-    @script << [ :reply, status, body, headers ]
+  # `during` runs while the request is "in flight", before the response is
+  # returned: use it to deliver a webhook that overtakes the HTTP response, to
+  # check transaction state, or to hold the call open for a race.
+  def reply(status = 200, body = {}, headers = {}, &during)
+    @script << [ :reply, status, body, headers, during ]
     self
   end
 
-  def fail_with(error)
-    @script << [ :error, error ]
+  def fail_with(error, &during)
+    @script << [ :error, error, during ]
     self
   end
 
@@ -48,9 +51,12 @@ class FakeGraph
     kind, *args = step
 
     if kind == :error
-      raise args.first
+      error, during = args
+      during&.call(@requests.last)
+      raise error
     else
-      status, body, headers = args
+      status, body, headers, during = args
+      during&.call(@requests.last)
       [ status, { "Content-Type" => "application/json" }.merge(headers), body.is_a?(String) ? body : JSON.generate(body) ]
     end
   end
