@@ -208,8 +208,11 @@ Per message item (one transaction):
 4. Enqueue SendMessageJob for each newly inserted outbound row.
 
 Per status item (one transaction): find by `wa_message_id`, else by
-`biz_opaque_callback_data` (our message id). On first match by opaque id, store the
-`wa_message_id`. Apply forward-only (§3). `errors[]` on `failed` → classify (§7).
+`biz_opaque_callback_data` (our message id). The opaque id names the message, not the
+attempt, so it is trusted only while the message has no `wa_message_id` (and is not
+`pending`, i.e. an attempt is or was in flight): then the `wa_message_id` is stored on
+first match. A message that already holds a different id has been resent since, so the
+status is an `orphan` ("stale id after resend") and changes nothing. Apply forward-only (§3). `errors[]` on `failed` → classify (§7).
 No match → `orphan` item outcome (replay applies it later if the message appears).
 
 Item failures roll back that item only; the delivery becomes `partially_failed` (or
