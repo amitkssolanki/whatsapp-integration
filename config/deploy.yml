@@ -51,6 +51,11 @@ env:
     SOLID_QUEUE_IN_PUMA: "1" # Solid Queue supervisor runs inside Puma; no separate job container
     DB_HOST: whatsapp-integration-db # Kamal names accessories <service>-<accessory>
     RAILS_LOG_LEVEL: info
+    # Thruster's own access log records full query strings; Meta's webhook verification GET
+    # carries the verify token in its query. Rails logs every request already, with
+    # parameters filtered, so Thruster's request log is off. (The shared kamal-proxy logs
+    # query strings too and has no redaction option; that one line per handshake remains.)
+    LOG_REQUESTS: "false"
     WEB_CONCURRENCY: "1"
     JOB_CONCURRENCY: "1"
     # Puma threads and the Active Record pool share this value. Puma plus the Solid Queue
