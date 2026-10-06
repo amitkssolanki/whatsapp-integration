@@ -44,7 +44,9 @@ module Webhooks
       )
 
       case outcome
-      when :applied then result(wa_message_id, "applied", "message_id=#{message.id} status=failed")
+      when :applied
+        message.log_window_disagreement(source: "status_webhook") if message.error_category == "window_closed"
+        result(wa_message_id, "applied", "message_id=#{message.id} status=failed")
       when :anomaly then result(wa_message_id, "anomaly", "message_id=#{message.id} failed after #{message.status}")
       when :duplicate then result(wa_message_id, "duplicate", "message_id=#{message.id} status=failed")
       else result(wa_message_id, "ignored", "message_id=#{message.id} is #{message.status}")

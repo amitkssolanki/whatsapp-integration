@@ -18,14 +18,16 @@ module Webhooks
 
     def call
       wa_message_id = @item["id"].presence or raise ArgumentError, "message without an id"
-      from = @item["from"].presence or raise ArgumentError, "message without a sender"
+      sender = identify_sender or raise ArgumentError, "message without a sender (no phone number and no user id)"
 
-      customer = Customer.resolve!(whatsapp_number: from, display_name: contact_name(from), wa_user_id: user_id(from))
+      customer = Customer.resolve!(**sender)
       conversation = customer.conversation
 
       inbound_id = insert_inbound(conversation, wa_message_id)
       return result(wa_message_id, "duplicate") unless inbound_id
 
+      # Only a message that is new may refresh what we know about the customer.
+      customer.fill_in!(**sender)
       touch_conversation(conversation)
       detail = react(customer, conversation, inbound_id)
       result(wa_message_id, "applied", detail)
@@ -72,26 +74,9 @@ module Webhooks
       )
     end
 
-    # Pending outbound row + its send job, in the same transaction. The unique
-    # idempotency key means a reprocessed inbound can never queue a second reply.
+    # Pending outbound row + its send job, in the same transaction.
     def queue_reply(conversation, reply, order_id: nil)
-      inserted = Message.insert(
-        {
-          conversation_id: conversation.id,
-          direction: :outbound,
-          status: :pending,
-          message_type: reply.message_type,
-          body: reply.body,
-          purpose: reply.purpose,
-          idempotency_key: reply.idempotency_key,
-          order_id: order_id,
-          webhook_delivery_id: @delivery.id,
-          raw_payload: { "request" => reply.request }
-        },
-        unique_by: :idempotency_key, returning: %w[id]
-      )
-      outbound_id = inserted.rows.dig(0, 0)
-      SendMessageJob.perform_later(outbound_id) if outbound_id
+      Messages::Outbox.queue(conversation: conversation, reply: reply, order_id: order_id, webhook_delivery_id: @delivery.id)
     end
 
     # GREATEST ignores NULL and never moves backwards, so out-of-order
@@ -114,17 +99,29 @@ module Webhooks
       Time.at(Integer(@item["timestamp"].to_s)).utc if @item["timestamp"].to_s.match?(/\A\d+\z/)
     end
 
-    def contact_for(from)
-      contacts = Array(@value["contacts"]).select { |contact| contact.is_a?(Hash) }
-      contacts.find { |contact| contact["wa_id"] == from } || contacts.first
+    # Who sent this: the business-scoped user id and/or the phone number (docs/v2/DESIGN.md §6).
+    # Either may be missing since Meta stopped sending phone numbers for users
+    # with usernames; with neither there is no one to reply to.
+    def identify_sender
+      from = @item["from"].presence
+      user_id = @item["from_user_id"].presence
+      contact = contact_for(from, user_id)
+
+      sender = {
+        whatsapp_number: from || contact&.dig("wa_id").presence,
+        wa_user_id: user_id || contact&.dig("user_id").presence,
+        display_name: contact&.dig("profile", "name")
+      }
+      sender if sender[:whatsapp_number] || sender[:wa_user_id]
     end
 
-    def contact_name(from)
-      contact_for(from)&.dig("profile", "name")
-    end
-
-    def user_id(from)
-      contact_for(from)&.dig("user_id").presence || @item["from_user_id"]
+    # The contact entry that describes the sender: the same wa_id as `from`, or the
+    # same user id as `from_user_id`. No exact match means no contact data at all;
+    # never borrow another person's name or user id.
+    def contact_for(from, user_id)
+      Array(@value["contacts"]).select { |contact| contact.is_a?(Hash) }.find do |contact|
+        (from && contact["wa_id"] == from) || (user_id && contact["user_id"] == user_id)
+      end
     end
 
     def result(ref, outcome, detail = nil)

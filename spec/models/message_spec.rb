@@ -49,6 +49,40 @@ RSpec.describe Message, type: :model do
       expect(message.reload).to have_attributes(status: "read", delivered_at: at(4), read_at: at(5))
     end
 
+    it "catches up to the furthest stamped step when a `sending` message settles as unknown" do
+      message = create_outbound(status: :sending)
+      message.apply_lifecycle!("sent", at: at(1))
+      message.apply_lifecycle!("delivered", at: at(2))
+      expect(message.reload).to be_sending
+
+      expect(message.transition!(:unknown, error_category: "ambiguous")).to be(true)
+
+      expect(message.reload).to have_attributes(status: "delivered", error_category: "ambiguous")
+    end
+
+    it "catches up after accepted too, and stays put when nothing was stamped" do
+      stamped = create_outbound(status: :sending)
+      stamped.apply_lifecycle!("read", at: at(3))
+      stamped.apply_lifecycle!("accepted", at: at(0))
+      expect(stamped.reload.status).to eq("read")
+
+      quiet = create_outbound(status: :sending)
+      quiet.transition!(:unknown)
+      expect(quiet.reload.status).to eq("unknown")
+    end
+
+    it "does not catch up when the message leaves `sending` for retry_scheduled or failed" do
+      retried = create_outbound(status: :sending)
+      retried.apply_lifecycle!("sent", at: at(1))
+      expect(retried.transition!(:retry_scheduled)).to be(true)
+      expect(retried.reload.status).to eq("retry_scheduled")
+
+      failed = create_outbound(status: :sending)
+      failed.apply_lifecycle!("sent", at: at(1))
+      failed.transition!(:failed, error_category: "request_invalid")
+      expect(failed.reload.status).to eq("failed")
+    end
+
     it "resolves an `unknown` message forward from a status webhook" do
       message = create_outbound(status: :unknown)
 

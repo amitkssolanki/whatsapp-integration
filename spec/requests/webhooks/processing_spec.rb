@@ -44,6 +44,122 @@ RSpec.describe "Webhook processing", type: :request do
       expect(customer.conversation.last_inbound_at).to eq(Time.at(1_786_204_851).utc)
     end
 
+    context "when Meta omits the phone number (username users)" do
+      # Derived from the real order fixture by deleting the phone fields; nothing new is committed.
+      def without_phone(name)
+        fixture_json(name).tap do |json|
+          value = json.dig("entry", 0, "changes", 0, "value")
+          value["contacts"].each { |contact| contact.delete("wa_id") }
+          (value["messages"] || []).each { |message| message.delete("from") }
+        end.to_json
+      end
+
+      it "creates a phone-less customer keyed by the business-scoped user id and still queues the receipt" do
+        delivery = deliver_and_process(without_phone("order"))
+
+        expect(delivery).to be_processed
+        expect(Customer.sole).to have_attributes(whatsapp_number: nil, wa_user_id: "US.1000000000000002", display_name: "Test Customer 2")
+        expect(Order.sole.customer).to eq(Customer.sole)
+        expect(Message.outbound.sole).to have_attributes(status: "pending", purpose: "order_received")
+      end
+
+      it "fills the phone number in when a later message carries it" do
+        deliver_and_process(without_phone("order"))
+        phone_less = Customer.sole
+
+        deliver_and_process(greeting)
+
+        expect(Customer.sole.id).to eq(phone_less.id)
+        expect(Customer.sole.whatsapp_number).to eq("15550100004")
+        expect(Conversation.count).to eq(1)
+      end
+
+      it "recognises a customer first seen by phone when the user id is all that arrives later" do
+        deliver_and_process(greeting)
+        customer = Customer.sole
+
+        deliver_and_process(without_phone("order"))
+
+        expect(Customer.sole.id).to eq(customer.id)
+        expect(Order.sole.customer_id).to eq(customer.id)
+      end
+
+      it "fails the item, writes nothing and keeps the delivery replayable when there is no identifier at all" do
+        body = fixture_json("order").tap do |json|
+          value = json.dig("entry", 0, "changes", 0, "value")
+          value.delete("contacts")
+          value["messages"][0].slice!("id", "timestamp", "type", "order")
+        end.to_json
+
+        delivery = deliver_and_process(body)
+
+        expect(delivery).to have_attributes(status: "failed", last_error_class: "ArgumentError")
+        expect(outcome_results(delivery)).to eq([ "error" ])
+        expect([ Customer.count, Message.count, Order.count ]).to eq([ 0, 0, 0 ])
+        expect(delivery).to be_replayable
+      end
+    end
+
+    describe "customer data refresh" do
+      it "does not let a duplicate or replayed old message overwrite newer customer data" do
+        deliver_and_process(order_body)
+        Customer.sole.update_columns(display_name: "Newer Name", wa_user_id: "US.NEWER")
+
+        duplicate = deliver_and_process(order_body.sub("{", "{ "))
+
+        expect(outcome_results(duplicate)).to eq([ "duplicate" ])
+        expect(Customer.sole).to have_attributes(display_name: "Newer Name", wa_user_id: "US.NEWER")
+      end
+
+      it "refreshes the profile name from a genuinely new message" do
+        deliver_and_process(order_body)
+
+        deliver_and_process(greeting.sub("Test Customer 2", "Renamed Customer"))
+
+        expect(Customer.sole.display_name).to eq("Renamed Customer")
+      end
+
+      it "attaches no name or user id when the contacts block describes someone else" do
+        body = fixture_json("order").tap do |json|
+          contact = json.dig("entry", 0, "changes", 0, "value", "contacts", 0)
+          contact["wa_id"] = "15550100999"
+          contact["user_id"] = "US.SOMEONE-ELSE"
+          contact["profile"]["name"] = "Someone Else"
+        end.to_json
+
+        deliver_and_process(body)
+
+        # The message's own from/from_user_id still identify the sender; the stranger's contact is not used.
+        expect(Customer.sole).to have_attributes(whatsapp_number: "15550100004", wa_user_id: "US.1000000000000002", display_name: nil)
+      end
+
+      it "does not borrow the first contact's name or user id for a phone-less sender it cannot match" do
+        body = fixture_json("order").tap do |json|
+          value = json.dig("entry", 0, "changes", 0, "value")
+          value["messages"][0].delete("from_user_id")
+          value["contacts"][0]["wa_id"] = "15550100999"
+          value["contacts"][0]["user_id"] = "US.SOMEONE-ELSE"
+          value["contacts"][0]["profile"]["name"] = "Someone Else"
+        end.to_json
+
+        deliver_and_process(body)
+
+        expect(Customer.sole).to have_attributes(whatsapp_number: "15550100004", wa_user_id: nil, display_name: nil)
+      end
+
+      it "matches the contact by user id when the message has no phone number" do
+        body = fixture_json("order").tap do |json|
+          value = json.dig("entry", 0, "changes", 0, "value")
+          value["messages"][0].delete("from")
+          value["contacts"][0].delete("wa_id")
+        end.to_json
+
+        deliver_and_process(body)
+
+        expect(Customer.sole).to have_attributes(whatsapp_number: nil, wa_user_id: "US.1000000000000002", display_name: "Test Customer 2")
+      end
+    end
+
     it "keeps an order with unknown SKUs and flags it for review" do
       Product.where(sku: "BEV-001").destroy_all
 
@@ -210,6 +326,42 @@ RSpec.describe "Webhook processing", type: :request do
         error_category: "recipient_not_allowed", failed_at: Time.at(1_786_174_613).utc
       )
       expect(message.error_details).to start_with("Recipient phone number not in allowed list")
+    end
+
+    describe "131047 (24-hour window) arriving as a failed status" do
+      def failed_131047
+        fixture_json("status_sent").tap do |json|
+          status = json.dig("entry", 0, "changes", 0, "value", "statuses", 0)
+          status["status"] = "failed"
+          status["errors"] = [ { "code" => 131_047, "title" => "Re-engagement message" } ]
+        end.to_json
+      end
+
+      it "fails the message as window_closed and logs a window_disagreement for a message we sent" do
+        message = outbound_for("status_sent")
+
+        log = capture_log { deliver_and_process(failed_131047) }
+
+        expect(message.reload).to have_attributes(status: "failed", error_category: "window_closed", error_code: 131_047)
+        expect(log).to include("event=window_disagreement").and include("source=status_webhook").and include("message_id=#{message.id}")
+      end
+
+      it "logs the disagreement once: a duplicate delivery of the same failure is not a second event" do
+        outbound_for("status_sent")
+        deliver_and_process(failed_131047)
+
+        log = capture_log { deliver_and_process(failed_131047.sub("{", "{ ")) }
+
+        expect(log).not_to include("window_disagreement")
+      end
+
+      it "stays quiet when an operator overrode the guard on purpose" do
+        outbound_for("status_sent", guard_override_by: "amit")
+
+        log = capture_log { deliver_and_process(failed_131047) }
+
+        expect(log).not_to include("window_disagreement")
+      end
     end
 
     it "reports failed-after-delivered as an anomaly and leaves the message delivered" do

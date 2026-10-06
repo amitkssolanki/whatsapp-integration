@@ -15,6 +15,17 @@ RSpec.describe AppLog do
     expect(logged { described_class.event("x", reason: "bad signature") }).to include('reason="bad signature"')
   end
 
+  it "writes warnings at warn level, in the same format" do
+    io = StringIO.new
+    logger = ActiveSupport::Logger.new(io)
+    logger.formatter = proc { |severity, _time, _progname, message| "#{severity} #{message}\n" }
+    Rails.logger.broadcast_to(logger)
+    described_class.warn("window.override_send", message_id: 5, by: "amit")
+    Rails.logger.stop_broadcasting_to(logger)
+
+    expect(io.string).to include("WARN event=window.override_send message_id=5 by=amit")
+  end
+
   it "refuses PII-shaped fields outside production" do
     %i[body whatsapp_number wa_message_id display_name from].each do |field|
       expect { described_class.event("x", field => "secret") }.to raise_error(ArgumentError, /must not log/)

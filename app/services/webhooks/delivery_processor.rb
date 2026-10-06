@@ -53,7 +53,7 @@ module Webhooks
       raise
     rescue StandardError => e
       AppLog.event("webhook.item_failed", delivery_id: @delivery.id, kind: kind, error_class: e.class.name)
-      ItemResult.for(kind, item["id"].to_s, "error", "#{e.class.name}: #{e.message}".truncate(300))
+      ItemResult.for(kind, item["id"].to_s, "error", Redact.exception(e))
     end
 
     def log_item(result)
