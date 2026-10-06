@@ -277,7 +277,8 @@ test):
 | Variable | Purpose |
 |---|---|
 | `WHATSAPP_TOKEN` | System User token for the Graph API |
-| `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_ACCOUNT_ID` | Sending number and account |
+| `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_ACCOUNT_ID` | Sending number (Meta's id for it) and account |
+| `WHATSAPP_DISPLAY_PHONE_NUMBER` | Optional. The business number's digits; only the setup check uses it, to confirm the phone number id belongs to it. Keep it out of tracked files |
 | `WHATSAPP_VERIFY_TOKEN` | Value you choose; must match Meta's webhook config |
 | `WHATSAPP_APP_SECRET` | Verifies `X-Hub-Signature-256` |
 | `WHATSAPP_ALLOW_UNSIGNED` | `1` skips signature checks; development and test only |
