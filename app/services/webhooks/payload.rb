@@ -24,13 +24,38 @@ module Webhooks
       object_type == EXPECTED_OBJECT
     end
 
-    # The first business phone number id the payload mentions.
-    def phone_number_id
-      values.each do |value|
+    # The business phone number id the payload is about: `ours` when any change
+    # is addressed to it (so a mixed batch is not labelled with a stranger's
+    # number), otherwise the first one the payload mentions.
+    def phone_number_id(preferring: nil)
+      ids = values.filter_map do |value|
         id = value.dig("metadata", "phone_number_id") if value["metadata"].is_a?(Hash)
-        return id.to_s if id.present?
+        id.to_s if id.present?
       end
-      nil
+      ids.find { |id| id == preferring.to_s } || ids.first
+    end
+
+    # True when `value` (a change's value) is addressed to a different business
+    # phone number than `ours`. A change that names no number cannot be ours
+    # either, so with a number configured it counts as foreign. With none
+    # configured nothing is foreign.
+    def self.foreign?(value, ours)
+      return false if ours.blank?
+
+      metadata = value["metadata"] if value.is_a?(Hash)
+      theirs = metadata["phone_number_id"] if metadata.is_a?(Hash)
+      theirs.to_s != ours.to_s
+    end
+
+    # Decided per change, not from the first metadata: true when there is
+    # something in the payload and none of it is addressed to `ours`. Items
+    # (or, for a payload without any, changes) are all foreign.
+    def all_foreign?(ours)
+      return false if ours.blank?
+
+      subjects = items_with_values.map(&:last)
+      subjects = values if subjects.empty?
+      subjects.any? && subjects.all? { |value| self.class.foreign?(value, ours) }
     end
 
     # {"messages"=>n, "statuses"=>n, "other"=>n}; `other` counts changes that
@@ -59,6 +84,10 @@ module Webhooks
     end
 
     private
+
+    def items_with_values
+      [].tap { |pairs| each_item { |_kind, value, item| pairs << [ item, value ] } }
+    end
 
     def entries
       Array(@data["entry"]).select { |entry| entry.is_a?(Hash) }

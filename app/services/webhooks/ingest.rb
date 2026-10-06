@@ -29,13 +29,13 @@ module Webhooks
 
     def attributes_for(payload)
       {
-        raw_body: storable_body,
+        **body_attributes,
         body_sha256: Digest::SHA256.hexdigest(@raw_body),
         signature_header: @signature_header,
         request_id: @request_id,
         received_at: Time.current,
         object_type: payload&.object_type,
-        phone_number_id: payload&.phone_number_id,
+        phone_number_id: payload&.phone_number_id(preferring: @config.phone_number_id),
         item_counts: payload ? payload.item_counts : {}
       }.merge(disposition(payload))
     end
@@ -43,23 +43,21 @@ module Webhooks
     def disposition(payload)
       return { status: :unparseable, outcome: { "reason" => "invalid_json" } } if payload.nil?
       return { status: :ignored, outcome: { "reason" => "unexpected_object" } } unless payload.expected_object?
-      return { status: :ignored, outcome: { "reason" => "phone_number_mismatch" } } if foreign_phone_number?(payload)
+      return { status: :ignored, outcome: { "reason" => "phone_number_mismatch" } } if payload.all_foreign?(@config.phone_number_id)
 
       { status: :received }
     end
 
-    def foreign_phone_number?(payload)
-      @config.phone_number_id.present? && payload.phone_number_id != @config.phone_number_id.to_s
-    end
-
-    # Valid JSON is always valid UTF-8 without NUL bytes, so only an unparseable
-    # body can need cleaning. Postgres refuses both, and an exception here would
-    # make Meta retry garbage forever; the hash still covers the original bytes.
-    def storable_body
+    # PostgreSQL text refuses NUL bytes and invalid UTF-8, and raising here
+    # would make Meta redeliver the same garbage forever. Such a body is stored
+    # twice: a scrubbed copy in raw_body (for display) and the exact bytes,
+    # base64 encoded, in raw_body_base64 so the signature can still be
+    # re-verified. Every other body is stored as text only.
+    def body_attributes
       body = @raw_body.dup.force_encoding(Encoding::UTF_8)
-      return body if body.valid_encoding? && !body.include?("\u0000")
+      return { raw_body: body } if body.valid_encoding? && !body.include?("\u0000")
 
-      body.scrub.delete("\u0000")
+      { raw_body: body.scrub.delete("\u0000"), raw_body_base64: Base64.strict_encode64(@raw_body.b) }
     end
   end
 end

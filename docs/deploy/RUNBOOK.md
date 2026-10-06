@@ -50,12 +50,18 @@ source ~/.config/whatsapp-demo/secrets.env
 kamal config | head -20          # sanity check (prints secrets: do not paste it anywhere)
 kamal setup                      # installs Docker, boots proxy + Postgres, builds, pushes, deploys
 curl -i https://HOST/up              # 200
-curl -s "https://HOST/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=$WHATSAPP_VERIFY_TOKEN&hub.challenge=ping"   # ping
+curl -s -o /dev/null -w '%{http_code}\n' "https://HOST/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=ping"   # 403: route is live, bad token refused
 ```
 
 Then, in Meta's dashboard (you): set callback URL `https://HOST/webhooks/whatsapp` and the same
-verify token. First certificate issuance can take a minute; if `/up` fails on TLS, check
-`kamal proxy logs` and that DNS is grey-cloud.
+verify token; Meta's **Verify and save** button is the real handshake test. First certificate
+issuance can take a minute; if `/up` fails on TLS, check `kamal proxy logs` and that DNS is
+grey-cloud.
+
+Do **not** put the real verify token in a `curl` URL (or any command line) to test the handshake:
+the query string ends up in shell history and in kamal-proxy and other access logs. The `wrong`
+placeholder above proves routing and rejection without it. Treat the verify token like a password;
+if it was ever exposed in a log, change it in `secrets.env`, redeploy and update Meta's webhook config.
 
 Install backups (once, on the VPS):
 
@@ -132,14 +138,49 @@ docker exec whatsapp-integration-db psql -U whatsapp_integration -d postgres -c 
 
 ### Restore over the live database (disaster)
 
+`pg_restore.sh` never writes to the live database: it restores the dump into a **new** database
+(`--single-transaction`, so a failed restore leaves nothing behind, and it refuses a name that
+already exists unless `--replace-scratch`). Putting the restored copy into service is a separate,
+deliberate, manual swap, done with the app stopped. Pick the restored name once, for example
+`whatsapp_integration_restored` (the same name in every step).
+
 ```sh
+# 1. Restore into a new database (the app keeps running; the live DB is untouched).
+ssh -t root@IP /opt/whatsapp-integration/backup/pg_restore.sh DUMP whatsapp_integration_restored
+#    Check the printed table count and latest migration, then compare counts with the live DB
+#    as in the drill above. Stop here if anything looks wrong: nothing has changed.
+
+# 2. Stop the app (laptop). Nothing may be connected to the live database during the rename.
 kamal app stop
-ssh -t root@IP /opt/whatsapp-integration/backup/pg_restore.sh --force-live DUMP whatsapp_integration_production   # asks you to type the DB name
+ssh root@IP "docker exec whatsapp-integration-db psql -U whatsapp_integration -d postgres -qAt \
+  -c \"SELECT count(*) FROM pg_stat_activity WHERE datname = 'whatsapp_integration_production'\""   # must print 0
+
+# 3. Swap by renaming (one psql session, in the postgres database). The old database is kept.
+ssh root@IP "docker exec -i whatsapp-integration-db psql -U whatsapp_integration -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+ALTER DATABASE whatsapp_integration_production RENAME TO whatsapp_integration_production_replaced;
+ALTER DATABASE whatsapp_integration_restored RENAME TO whatsapp_integration_production;
+SQL"
+
+# 4. Start the app and verify (laptop). Boot runs db:prepare, which applies any migration the
+#    dump predates; the app uses Meta's retries to catch up on webhooks it missed while stopped.
 kamal app boot
+curl -i https://HOST/up
 ```
 
+Undo (if the restored copy is wrong): `kamal app stop`, repeat step 3 with the two names swapped
+back (`..._production` to `..._restored`, then `..._production_replaced` to `..._production`),
+`kamal app boot`. Drop `whatsapp_integration_production_replaced` by hand only after the restored
+database has been in service long enough that you would not want the old one back
+(`DROP DATABASE whatsapp_integration_production_replaced`).
+
+Messages Meta delivered between the dump and the outage are not in the dump. Meta retries
+undelivered webhooks for a while; anything older is lost, and the Health page and the delivery
+list show what the restored database does contain. Send-side rows (`unknown`, `pending`) from
+before the dump are recovered by the stall sweeper and Meta's status webhooks, never resent blindly.
+
 New VPS after total loss: provision, update `server_ip` and DNS, `kamal setup`, `scp` the
-latest off-host dump to the VPS, then the three commands above.
+latest off-host dump to the VPS, then follow the four steps above (the fresh database created by
+`kamal setup` is the "live" one that gets replaced).
 
 ### Before the operating period (checklist)
 

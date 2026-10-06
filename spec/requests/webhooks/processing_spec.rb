@@ -450,13 +450,13 @@ RSpec.describe "Webhook processing", type: :request do
   end
 
   describe "failure handling in the job" do
-    it "retries infrastructure errors, leaving the delivery failed in between" do
+    it "retries infrastructure errors, leaving the delivery processing (not failed) in between" do
       delivery = deliver(greeting)
       allow_any_instance_of(Webhooks::MessageHandler).to receive(:call).and_raise(ActiveRecord::ConnectionNotEstablished, "db down")
 
       ProcessWebhookDeliveryJob.perform_now(delivery.id)
 
-      expect(delivery.reload).to have_attributes(status: "failed", last_error_class: "ActiveRecord::ConnectionNotEstablished", attempts: 1)
+      expect(delivery.reload).to have_attributes(status: "processing", last_error_class: "ActiveRecord::ConnectionNotEstablished", attempts: 1)
       retry_job = enqueued_jobs.find { |job| job["job_class"] == "ProcessWebhookDeliveryJob" && job["executions"] == 1 }
       expect(retry_job).to be_present
     end

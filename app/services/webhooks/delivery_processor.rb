@@ -7,14 +7,9 @@ module Webhooks
   # they propagate so the job retries the whole delivery, which is safe
   # because applied items are idempotent.
   class DeliveryProcessor
-    INFRASTRUCTURE_ERRORS = [
-      ActiveRecord::ConnectionNotEstablished,
-      ActiveRecord::Deadlocked,
-      ActiveRecord::LockWaitTimeout,
-      ActiveRecord::StatementTimeout,
-      PG::ConnectionBad,
-      PG::UnableToSend
-    ].freeze
+    # Passed to `rescue` and `retry_on`; see Webhooks::InfrastructureError for
+    # the classes and where they come from.
+    INFRASTRUCTURE_ERRORS = [ Webhooks::InfrastructureError ].freeze
 
     Outcome = Data.define(:results) do
       def summary = results.map(&:result).tally
@@ -30,12 +25,15 @@ module Webhooks
       end
     end
 
-    def initialize(delivery)
+    FOREIGN_NUMBER = "phone_number_mismatch".freeze
+
+    def initialize(delivery, config: Rails.application.config.whatsapp)
       @delivery = delivery
+      @config = config
     end
 
     def call
-      payload = Webhooks::Payload.parse(@delivery.raw_body) or raise ArgumentError, "stored body is not JSON"
+      payload = Webhooks::Payload.parse(@delivery.raw_bytes.force_encoding(Encoding::UTF_8)) or raise ArgumentError, "stored body is not JSON"
 
       results = []
       payload.each_item { |kind, value, item| results << process_item(kind, value, item) }
@@ -45,6 +43,10 @@ module Webhooks
     private
 
     def process_item(kind, value, item)
+      # One POST can carry changes for several business numbers; each item is
+      # judged by its own change's metadata.
+      return foreign_result(kind, item) if Webhooks::Payload.foreign?(value, @config.phone_number_id)
+
       ActiveRecord::Base.transaction do
         handler = kind == "message" ? MessageHandler.new(delivery: @delivery, value: value, item: item) : StatusHandler.new(delivery: @delivery, item: item)
         handler.call
@@ -54,6 +56,10 @@ module Webhooks
     rescue StandardError => e
       AppLog.event("webhook.item_failed", delivery_id: @delivery.id, kind: kind, error_class: e.class.name)
       ItemResult.for(kind, item["id"].to_s, "error", Redact.exception(e))
+    end
+
+    def foreign_result(kind, item)
+      ItemResult.for(kind, item["id"].to_s, "ignored", FOREIGN_NUMBER).tap { |result| log_item(result) }
     end
 
     def log_item(result)

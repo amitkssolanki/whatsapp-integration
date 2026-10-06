@@ -17,6 +17,13 @@ proxy:
   ssl: true
   host: <%= app_host %>
   app_port: 80 # Thruster listens on 80 inside the container
+  # Meta documents 3 MB as the maximum webhook payload. kamal-proxy buffers each
+  # request body and refuses anything larger with 413 before it reaches the app
+  # (the default limit is 1 GB). Key names: kamal 2.12 lib/kamal/configuration/proxy.rb,
+  # docs/proxy.yml. WebhookGuard enforces the same limit inside the app.
+  buffering:
+    requests: true
+    max_request_body: 3_145_728
   healthcheck:
     path: /up
     interval: 3
