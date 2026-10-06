@@ -22,17 +22,31 @@ Rails.application.configure do
   # config.asset_host = "http://assets.example.com"
 
   # Assume all access to the app is happening through a SSL-terminating reverse proxy.
-  # config.assume_ssl = true
+  # (kamal-proxy terminates TLS and sends X-Forwarded-Proto: https.)
+  config.assume_ssl = true
 
   # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
-  # config.force_ssl = true
+  config.force_ssl = true
 
   # Skip http-to-https redirect for the default health check endpoint.
-  # config.ssl_options = { redirect: { exclude: ->(request) { request.path == "/up" } } }
+  # kamal-proxy health-checks the container over plain HTTP, so /up must not redirect.
+  config.ssl_options = { redirect: { exclude: ->(request) { request.path == "/up" } } }
 
-  # Log to STDOUT with the current request id as a default log tag.
+  # Log to STDOUT (Docker collects it; rotation is configured in config/deploy.yml),
+  # one JSON object per line, with the current request id as a log tag.
   config.log_tags = [ :request_id ]
-  config.logger   = ActiveSupport::TaggedLogging.logger(STDOUT)
+  config.colorize_logging = false
+  config.logger = ActiveSupport::TaggedLogging.logger(STDOUT).tap do |logger|
+    logger.formatter = Class.new(::Logger::Formatter) do
+      include ActiveSupport::TaggedLogging::Formatter
+
+      def call(severity, time, _progname, message)
+        line = { time: time.utc.iso8601(3), level: severity, message: msg2str(message).strip }
+        line[:request_id] = current_tags.first if current_tags.any?
+        "#{JSON.generate(line)}\n"
+      end
+    end.new
+  end
 
   # Change to "debug" to log everything (including potentially personally-identifiable information!).
   config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info")
@@ -43,11 +57,11 @@ Rails.application.configure do
   # Don't log any deprecations.
   config.active_support.report_deprecations = false
 
-  # Replace the default in-process memory cache store with a durable alternative.
-  # config.cache_store = :mem_cache_store
+  # No cache backend: the app does not depend on one (no Redis, no Solid Cache).
+  config.cache_store = :null_store
 
-  # Replace the default in-process and non-durable queuing backend for Active Job.
-  # config.active_job.queue_adapter = :resque
+  # Active Job uses Solid Queue (set in config/application.rb), supervised inside Puma
+  # when SOLID_QUEUE_IN_PUMA=1. Action Mailer is not loaded; the app sends no email.
 
   # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
   # the I18n.default_locale when a translation cannot be found).
@@ -59,12 +73,10 @@ Rails.application.configure do
   # Only use :id for inspections in production.
   config.active_record.attributes_for_inspect = [ :id ]
 
-  # Enable DNS rebinding protection and other `Host` header attacks.
-  # config.hosts = [
-  #   "example.com",     # Allow requests from example.com
-  #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
-  # ]
-  #
-  # Skip DNS rebinding protection for the default health check endpoint.
-  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+  # DNS rebinding protection: only the public host is accepted. Boot fails without
+  # APP_HOST (see config/initializers/production_config_check.rb).
+  config.hosts = [ ENV["APP_HOST"] ] if ENV["APP_HOST"].present?
+
+  # The health check is addressed by IP/container name, so skip host authorization for it.
+  config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
 end
