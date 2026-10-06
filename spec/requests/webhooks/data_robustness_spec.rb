@@ -114,4 +114,76 @@ RSpec.describe "Webhook data robustness", type: :request do
       expect(item.reload).to have_attributes(item_price_cents: 4_000_000_000, catalog_price_cents: 3_000_000_000)
     end
   end
+
+  # Review 2 #9: a JSON "\u0000" in any string used to fail the item on every
+  # replay, which lost the order.
+  describe "NUL characters inside item strings" do
+    let!(:menu) { create_menu }
+
+    def with_nul(name)
+      json = fixture_json(name)
+      yield json.dig("entry", 0, "changes", 0, "value")
+      json.to_json # "\u0000" stays an escape in the JSON text
+    end
+
+    def outcome_items(delivery) = delivery.outcome["items"].map { |item| item.slice("result", "detail") }
+
+    it "applies an order whose note, product id and profile name carry NUL, replacing it with U+FFFD" do
+      body = with_nul("order") do |value|
+        value["contacts"][0]["profile"]["name"] = "Zo\u0000e"
+        order = value["messages"][0]["order"]
+        order["text"] = "no \u0000 onions"
+        order["product_items"][0]["product_retailer_id"] = "MAI-006\u0000"
+      end
+      expect(body).to include("\\u0000")
+
+      delivery = deliver_and_process(body)
+
+      expect(delivery).to be_processed
+      expect(outcome_items(delivery)).to eq([ { "result" => "applied", "detail" => "order_id=#{Order.sole.id}; nul_replaced" } ])
+      expect(Order.sole.wa_order_note).to eq("no \uFFFD onions")
+      expect(Order.sole.order_items.pluck(:product_retailer_id)).to include("MAI-006\uFFFD")
+      expect(Customer.sole.display_name).to eq("Zo\uFFFDe")
+      inbound = Message.inbound.sole
+      expect(inbound.body).to eq("no \uFFFD onions")
+      expect(inbound.raw_payload.dig("order", "text")).to eq("no \uFFFD onions")
+      expect(inbound.raw_payload.to_json).not_to include("\\u0000")
+      expect(Message.outbound.count).to eq(1) # the receipt is queued as usual
+    end
+
+    it "applies a text message with NUL in it, and a replay is a clean duplicate (not an error every time)" do
+      body = with_nul("text_greeting") { |value| value["messages"][0]["text"]["body"] = "Hi\u0000 there" }
+
+      delivery = deliver_and_process(body)
+      expect(delivery.outcome["items"][0]).to include("result" => "applied")
+      expect(delivery.outcome["items"][0]["detail"]).to match(/\Areply=\w+; nul_replaced\z/)
+      expect(Message.inbound.sole.body).to eq("Hi\uFFFD there")
+
+      delivery.replay!(by: "amit")
+      process_deliveries
+
+      expect(outcome_items(delivery.reload).sole).to eq("result" => "duplicate", "detail" => "nul_replaced")
+      expect(Message.inbound.count).to eq(1)
+    end
+
+    it "does not touch an item without NUL: no flag in the detail" do
+      delivery = deliver_and_process(meta_fixture("order"))
+
+      expect(delivery.outcome["items"][0]["detail"]).to eq("order_id=#{Order.sole.id}")
+    end
+
+    it "replaces NUL in a failed status's error text and flags the item" do
+      create_outbound(wa_message_id: fixture_wa_id("status_sent"), status: :accepted)
+      body = fixture_json("status_sent").tap do |json|
+        status = json.dig("entry", 0, "changes", 0, "value", "statuses", 0)
+        status.merge!("status" => "failed", "errors" => [ { "code" => 131_026, "title" => "Undeliver\u0000able", "message" => "x\u0000y" } ])
+      end.to_json
+
+      delivery = deliver_and_process(body)
+
+      expect(delivery.outcome["items"][0]).to include("result" => "applied")
+      expect(delivery.outcome["items"][0]["detail"]).to end_with("nul_replaced")
+      expect(Message.outbound.sole).to have_attributes(status: "failed", error_title: "Undeliver\uFFFDable")
+    end
+  end
 end

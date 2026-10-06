@@ -7,7 +7,7 @@ module Webhooks
 
     def initialize(delivery:, item:)
       @delivery = delivery
-      @item = item
+      @item, @nul_replaced = NulScrubber.call(item) # error text is stored; see NulScrubber
     end
 
     def call
@@ -101,7 +101,7 @@ module Webhooks
     end
 
     def result(ref, outcome, detail)
-      ItemResult.for("status", ref, outcome, detail)
+      ItemResult.for("status", ref, outcome, NulScrubber.detail(detail, @nul_replaced))
     end
   end
 end

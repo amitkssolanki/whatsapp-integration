@@ -14,6 +14,7 @@ module Webhooks
       @value = value
       @item = item
       @responder = responder
+      scrub_nul
     end
 
     def call
@@ -34,6 +35,15 @@ module Webhooks
     end
 
     private
+
+    # NUL cannot be stored (see NulScrubber). Only what this handler reads or
+    # writes is cleaned: the item, and the contacts that name its sender.
+    def scrub_nul
+      @item, item_changed = NulScrubber.call(@item)
+      contacts, contacts_changed = NulScrubber.call(@value["contacts"])
+      @value = @value.merge("contacts" => contacts) if contacts_changed
+      @nul_replaced = item_changed || contacts_changed
+    end
 
     # Returns what was decided, for the outcome record.
     def react(customer, conversation, inbound_id)
@@ -135,7 +145,7 @@ module Webhooks
     end
 
     def result(ref, outcome, detail = nil)
-      ItemResult.for("message", ref, outcome, detail)
+      ItemResult.for("message", ref, outcome, NulScrubber.detail(detail, @nul_replaced))
     end
   end
 end

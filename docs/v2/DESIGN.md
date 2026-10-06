@@ -227,6 +227,11 @@ first match. A message that already holds a different id has been resent since, 
 status is an `orphan` ("stale id after resend") and changes nothing. Apply forward-only (§3). `errors[]` on `failed` → classify (§7).
 No match → `orphan` item outcome (replay applies it later if the message appears).
 
+Before an item is written, every NUL (`\u0000`) in any of its strings (message text, order note,
+product fields, the sender's profile name, a status's error text; keys too) is replaced by U+FFFD
+(PostgreSQL text/jsonb cannot hold it) and the item's outcome detail gets `nul_replaced`
+(`Webhooks::NulScrubber`). Without this an order carrying a NUL would fail on every replay.
+
 Item failures roll back that item only; the delivery becomes `partially_failed` (or
 `failed` if nothing applied). Infrastructure errors (connection/deadlock) are retried
 by the job (3 attempts, polynomial backoff); code/data errors are not: the delivery is
