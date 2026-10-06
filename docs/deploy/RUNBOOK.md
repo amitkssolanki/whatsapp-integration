@@ -1,10 +1,19 @@
 # Production runbook
 
-One small Linux VPS. Kamal 2 deploys the image `ghcr.io/amitkssolanki/whatsapp-integration`
-behind kamal-proxy (automatic Let's Encrypt). PostgreSQL 17 runs as a Kamal accessory on the
-same host (named volume `whatsapp-integration-db-data`). One database; Solid Queue runs inside
-Puma. Config: `config/deploy.yml`, `.kamal/secrets`. Placeholders to replace in `config/deploy.yml`:
-`app_host` (`whatsapp-demo.example.com`) and `server_ip` (`203.0.113.10`).
+Canonical V2 integration environment: **https://whatsapp.railsfanatics.com** on the VPS
+**203.0.113.10** (`app_host` / `server_ip` in `config/deploy.yml`). It is the Meta webhook
+target; there is no ngrok in the normal flow.
+
+Kamal 2 deploys the image `ghcr.io/amitkssolanki/whatsapp-integration` behind kamal-proxy
+(automatic Let's Encrypt). PostgreSQL 17 runs as a Kamal accessory on the same host (named
+volume `whatsapp-integration-db-data`). One database; Solid Queue runs inside Puma.
+Config: `config/deploy.yml`, `.kamal/secrets`.
+
+**The VPS is shared.** One `kamal-proxy` (v0.9.2, deployed by Kamal 2.12) fronts several other
+applications. This app joins it as its own service; never run `kamal proxy reboot` or
+`kamal proxy remove` from this repo (it would interrupt every app on the host), and never
+`docker system prune`. Both containers are memory-capped (app 768 MB, Postgres 256 MB) so a
+fault here cannot starve the others.
 
 All `kamal` commands run from your laptop in this repo (`alias kamal='bundle exec kamal'`; there is no
 binstub), with the secrets exported (below).
@@ -15,7 +24,7 @@ binstub), with the secrets exported (below).
 |---|---|
 | VPS | Ubuntu 24.04 LTS, amd64, 2 GB RAM, public IPv4, ports 22/80/443 open. Your SSH public key on `root` (`ssh root@IP` works without a password). Docker is installed by `kamal setup`. |
 | DNS | A record `HOST -> IP`, **DNS-only (grey cloud) on Cloudflare**. Proxied (orange) breaks the Let's Encrypt challenge that kamal-proxy performs. Check: `dig +short HOST` returns the VPS IP. |
-| GHCR token | GitHub classic PAT with `write:packages` and `read:packages` (Settings > Developer settings). Kamal also logs the VPS into ghcr.io with it. |
+| GHCR token | Taken from the `gh` CLI login at source time (`gh auth token`, needs `write:packages`), as for the other apps on this host. Kamal also logs the VPS into ghcr.io with it. |
 | Config edit | Set the real `app_host` and `server_ip` in `config/deploy.yml`, commit. Kamal builds from the committed HEAD and refuses a dirty tree. |
 | Secrets | See below. |
 
@@ -26,7 +35,7 @@ command. `.kamal/secrets` only references these names (no values).
 
 ```sh
 # ~/.config/whatsapp-demo/secrets.env
-export KAMAL_REGISTRY_PASSWORD=...   # the GHCR PAT
+export KAMAL_REGISTRY_PASSWORD="$(gh auth token)"   # evaluated when sourced, not stored
 export SECRET_KEY_BASE=...           # bin/rails secret
 export POSTGRES_PASSWORD=...         # openssl rand -hex 24 (used by the app AND the accessory)
 export WHATSAPP_VERIFY_TOKEN=...     # any string you invent; typed again in Meta's webhook config
@@ -39,7 +48,18 @@ export WHATSAPP_APP_SECRET=...       # Meta: App Settings > Basic > App secret
 export CATALOG_ID=...                # Meta: Commerce Manager > Catalog ID
 ```
 
-The Meta values come from your Meta dashboards, which only you operate. The app refuses to boot
+The Meta values come from your Meta dashboards, which only you operate.
+
+Two values may hold a **fail-closed placeholder** until the Meta side is ready, so the app can be
+deployed and verified first:
+
+- `WHATSAPP_APP_SECRET='placeholder-<random>'`: a secret nobody knows, so every webhook POST is
+  rejected with 401. Replace it with the real App Secret before pointing Meta at the app.
+- `WHATSAPP_PHONE_NUMBER_ID='awaiting-meta-setup'`: not numeric, so the app never calls the
+  Graph API with it (sends fail as `auth_config` without a request) and inbound events for any
+  real number are stored as `ignored` (replayable later).
+
+Changing a secret takes effect on the next `kamal deploy` (Kamal 2 passes secrets at boot). The app refuses to boot
 if any of `WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_VERIFY_TOKEN, WHATSAPP_APP_SECRET,
 ADMIN_USER, ADMIN_PASSWORD, APP_HOST` is missing, or if `WHATSAPP_ALLOW_UNSIGNED` is set.
 

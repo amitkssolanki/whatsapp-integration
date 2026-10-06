@@ -2,16 +2,21 @@
 # accessory on the same host. Nothing here is a secret; see .kamal/secrets and
 # docs/deploy/RUNBOOK.md. Do not run `kamal setup` until the RUNBOOK prerequisites are met.
 <%
-  # Single source of truth for the two values Amit must replace.
-  app_host  = "whatsapp-demo.example.com" # stable subdomain, DNS A record -> server_ip (DNS-only)
-  server_ip = "203.0.113.10"              # the VPS public IPv4 (placeholder from TEST-NET-3)
+  # The canonical V2 integration environment (the Meta webhook target).
+  app_host  = "whatsapp.railsfanatics.com" # DNS A record -> server_ip, DNS-only
+  server_ip = "203.0.113.10"               # shared VPS: one kamal-proxy fronts several apps
 %>
 service: whatsapp-integration
 image: amitkssolanki/whatsapp-integration
 
 servers:
   web:
-    - <%= server_ip %>
+    hosts:
+      - <%= server_ip %>
+    options:
+      # Puma plus the in-process Solid Queue supervisor. Bounded because the VPS is
+      # shared with other applications: a fault here must not starve them.
+      memory: 768m
 
 proxy:
   ssl: true
@@ -97,6 +102,7 @@ accessories:
       - whatsapp-integration-db-data:/var/lib/postgresql/data
     options:
       restart: unless-stopped # the top-level `logging:` also applies to this container
+      memory: 256m
 
 aliases:
   console: app exec --interactive --reuse "bin/rails console"
