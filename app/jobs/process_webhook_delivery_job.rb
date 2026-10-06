@@ -44,7 +44,8 @@ class ProcessWebhookDeliveryJob < ApplicationJob
       last_error_message: error&.detail
     }
 
-    if delivery.transition!(final, **attrs)
+    # The outcome carries Meta message ids and would otherwise show in the SQL log.
+    if AppLog.quietly { delivery.transition!(final, **attrs) }
       AppLog.event("webhook.processed", job_id: job_id, delivery_id: delivery.id, status: final, summary: outcome.summary.to_json)
     else
       AppLog.event("webhook.finish_lost", job_id: job_id, delivery_id: delivery.id, status: delivery.reload.status)

@@ -19,6 +19,13 @@ module AppLog
     Rails.logger.info(([ "event=#{name}" ] + pairs).join(" "))
   end
 
+  # Runs a block with SQL debug logging off. insert_all/upsert render values
+  # inline in the SQL text, where attribute filtering cannot reach them, so
+  # statements that carry phone numbers, names or Meta ids run through here.
+  def self.quietly(&block)
+    Rails.logger.silence(Logger::INFO, &block)
+  end
+
   def self.format_value(value)
     text = value.to_s
     text.match?(/\A[\w.:\-\/]+\z/) ? text : text.inspect

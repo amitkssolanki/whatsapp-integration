@@ -29,4 +29,18 @@ RSpec.describe AppLog do
     expect(line).to include("delivery_id=1")
     expect(line).not_to include("secret")
   end
+
+  describe ".quietly" do
+    it "hides SQL debug lines but not info events" do
+      log = logged do
+        described_class.quietly do
+          Customer.where(whatsapp_number: "x").to_a
+          described_class.event("inside")
+        end
+      end
+
+      expect(log).not_to include("SELECT")
+      expect(log).to include("event=inside")
+    end
+  end
 end

@@ -50,7 +50,13 @@ module Webhooks
     end
 
     def insert_inbound(conversation, wa_message_id)
-      inserted = Message.insert(
+      inserted = AppLog.quietly { insert_inbound_row(conversation, wa_message_id) }
+      inserted.rows.dig(0, 0)
+    end
+
+    # The INSERT renders the payload inline, hence the quiet block above.
+    def insert_inbound_row(conversation, wa_message_id)
+      Message.insert(
         {
           conversation_id: conversation.id,
           direction: :inbound,
@@ -64,7 +70,6 @@ module Webhooks
         },
         unique_by: :wa_message_id, returning: %w[id]
       )
-      inserted.rows.dig(0, 0)
     end
 
     # Pending outbound row + its send job, in the same transaction. The unique

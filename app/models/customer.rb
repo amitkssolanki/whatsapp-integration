@@ -9,8 +9,10 @@ class Customer < ApplicationRecord
   # INSERTs use ON CONFLICT DO NOTHING instead of find-then-create, so the
   # loser waits for the winner's commit and reads the winner's row.
   def self.resolve!(whatsapp_number:, display_name: nil, wa_user_id: nil)
-    insert({ whatsapp_number: whatsapp_number, display_name: display_name, wa_user_id: wa_user_id },
-           unique_by: :whatsapp_number)
+    AppLog.quietly do # the INSERT renders the number and name inline
+      insert({ whatsapp_number: whatsapp_number, display_name: display_name, wa_user_id: wa_user_id },
+             unique_by: :whatsapp_number)
+    end
     customer = find_by!(whatsapp_number: whatsapp_number)
 
     fresh = { display_name: display_name.presence, wa_user_id: wa_user_id.presence }.compact

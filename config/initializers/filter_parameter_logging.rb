@@ -12,5 +12,6 @@ Rails.application.config.filter_parameters += [
 # log's "Parameters:" line and to ActiveRecord's inspect and SQL bind logging,
 # so these never reach the log.
 Rails.application.config.filter_parameters += [
-  :whatsapp_number, :display_name, :wa_, :raw_body, :raw_payload, :body, :signature, :entry
+  :whatsapp_number, :display_name, :wa_, :raw_body, :raw_payload, :body, :signature, :entry,
+  :catalog_id, :phone_number_id, :last_error_message
 ]
