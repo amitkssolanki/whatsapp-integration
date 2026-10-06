@@ -1,5 +1,5 @@
 module Admin
-  class ConversationsController < ApplicationController
+  class ConversationsController < BaseController
     def index
       @conversations = Conversation.includes(:customer, :messages).order(last_message_at: :desc, created_at: :desc)
     end
