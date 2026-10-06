@@ -32,9 +32,10 @@ class ExtendMessagesForDeliveryTracking < ActiveRecord::Migration[8.1]
     # keep the column default (received).
     execute "UPDATE messages SET status = #{STATUS_UNKNOWN} WHERE direction = #{OUTBOUND}"
 
-    # V1 stored every delivery of a duplicated webhook as its own row. Keep the
-    # first one as the owner of the id (the id also stays in raw_payload) so the
-    # unique index below can exist on real data.
+    # Defensive: V1 had no unique constraint on wa_message_id. If any id appears
+    # twice, keep the first row as its owner (the id stays in raw_payload) so the
+    # unique index below can be created. The archived V1 data has no such
+    # duplicates; this only protects other copies of the V1 database.
     execute <<~SQL.squish
       UPDATE messages SET wa_message_id = NULL
       WHERE wa_message_id IS NOT NULL
