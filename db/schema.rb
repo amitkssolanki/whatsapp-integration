@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_000010) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_000020) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -98,13 +98,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_000010) do
   create_table "order_items", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "currency", default: "USD", null: false
-    t.integer "item_price_cents", default: 0, null: false
+    t.bigint "item_price_cents", default: 0, null: false
     t.bigint "order_id", null: false
     t.bigint "product_id"
     t.string "product_retailer_id", null: false
     t.integer "quantity", default: 1, null: false
     t.datetime "updated_at", null: false
-    t.integer "catalog_price_cents"
+    t.bigint "catalog_price_cents"
     t.index ["order_id"], name: "index_order_items_on_order_id"
     t.index ["product_id"], name: "index_order_items_on_product_id"
   end
@@ -115,7 +115,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_000010) do
     t.string "currency", default: "USD", null: false
     t.bigint "customer_id", null: false
     t.integer "status", default: 0, null: false
-    t.integer "total_cents", default: 0, null: false
+    t.bigint "total_cents", default: 0, null: false
     t.datetime "updated_at", null: false
     t.text "wa_order_note"
     t.bigint "source_message_id"
@@ -318,6 +318,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_000010) do
     t.string "last_replayed_by"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.text "raw_body_base64"
     t.index ["body_sha256"], name: "index_webhook_deliveries_on_body_sha256"
     t.index ["received_at"], name: "index_webhook_deliveries_on_received_at"
     t.index ["status", "received_at"], name: "index_webhook_deliveries_on_status_and_received_at"

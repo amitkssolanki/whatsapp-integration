@@ -33,7 +33,7 @@ module Webhooks
     end
 
     def call
-      payload = Webhooks::Payload.parse(@delivery.raw_body) or raise ArgumentError, "stored body is not JSON"
+      payload = Webhooks::Payload.parse(@delivery.raw_bytes.force_encoding(Encoding::UTF_8)) or raise ArgumentError, "stored body is not JSON"
 
       results = []
       payload.each_item { |kind, value, item| results << process_item(kind, value, item) }

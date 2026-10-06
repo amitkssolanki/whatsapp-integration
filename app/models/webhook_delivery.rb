@@ -27,7 +27,27 @@ class WebhookDelivery < ApplicationRecord
 
   REPLAYABLE_STATUSES = %w[failed partially_failed processed].freeze
 
-  validates :raw_body, :body_sha256, :received_at, presence: true
+  validates :body_sha256, :received_at, presence: true
+  # An empty (or all-NUL, once scrubbed) body is a legitimate thing to have
+  # received and signed; only a missing one is a bug.
+  validates :raw_body, exclusion: { in: [ nil ], message: :blank }
+
+  # The exact bytes Meta sent, which the signature covers. Almost always that is
+  # raw_body; bodies PostgreSQL text cannot hold (invalid UTF-8, NUL) keep a
+  # scrubbed copy in raw_body for display and the real bytes, base64 encoded,
+  # in raw_body_base64. Returns a new, binary string. Raises ArgumentError when
+  # the stored base64 is corrupt.
+  def raw_bytes
+    raw_body_base64.present? ? Base64.strict_decode64(raw_body_base64) : raw_body.to_s.b
+  end
+
+  # The stored signature checked against the stored exact bytes and the
+  # current app secret.
+  def stored_signature_valid?
+    Whatsapp::Signature.valid?(raw_bytes, signature_header)
+  rescue ArgumentError
+    false
+  end
 
   def replayable?
     REPLAYABLE_STATUSES.include?(status)
@@ -43,7 +63,7 @@ class WebhookDelivery < ApplicationRecord
   def replay!(by:)
     raise NotReplayable, "a #{status} delivery cannot be replayed" unless replayable?
 
-    unless Whatsapp::Signature.valid?(raw_body, signature_header)
+    unless stored_signature_valid?
       AppLog.event("webhook.replay_refused", delivery_id: id, reason: "signature")
       raise SignatureRefused, "the stored body does not match its stored signature"
     end
