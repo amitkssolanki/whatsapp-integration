@@ -113,7 +113,9 @@ module Health
     def inactive = { active: false, categories: [], failures: 0, latest_failed_at: nil, latest_error_code: nil, latest_error_title: nil }
 
     def listing(scope)
-      { count: scope.count, recent: scope.limit(RECENT_LIMIT).to_a }
+      recent = scope.limit(RECENT_LIMIT)
+      recent = recent.without_bodies if scope.klass == WebhookDelivery # never load raw bodies just to list deliveries
+      { count: scope.count, recent: recent.to_a }
     end
   end
 end

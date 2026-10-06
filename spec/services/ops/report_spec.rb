@@ -21,12 +21,25 @@ RSpec.describe Ops::Report do
       ENV.delete("GIT_SHA")
     end
 
-    it "falls back to git, then to unknown" do
+    it "falls back to KAMAL_VERSION (set by Kamal in the app container), then to git, then to unknown" do
+      saved = ENV.to_h.slice("GIT_SHA", "KAMAL_VERSION")
+      sha = -> { described_class.new(from: from, to: to).call[:period][:git_sha] }
       ENV.delete("GIT_SHA")
-      expect(report[:period][:git_sha]).to match(/\A(\h{4,40}|unknown)\z/)
+      ENV["KAMAL_VERSION"] = "0123456789abcdef0123456789abcdef01234567"
+      expect(sha.call).to eq("0123456789abcdef0123456789abcdef01234567")
+
+      ENV["GIT_SHA"] = "abc1234"
+      expect(sha.call).to eq("abc1234") # an explicit GIT_SHA wins
+
+      ENV.delete("GIT_SHA")
+      ENV.delete("KAMAL_VERSION")
+      expect(sha.call).to match(/\A(\h{4,40}|unknown)\z/)
 
       allow(Open3).to receive(:capture3).and_raise(Errno::ENOENT)
-      expect(described_class.new(from: from, to: to).call[:period][:git_sha]).to eq("unknown")
+      expect(sha.call).to eq("unknown")
+    ensure
+      %w[GIT_SHA KAMAL_VERSION].each { |key| ENV.delete(key) }
+      saved.each { |key, value| ENV[key] = value }
     end
 
     it "accepts strings and rejects an empty or reversed window" do

@@ -78,8 +78,12 @@ module Ops
       time
     end
 
+    # GIT_SHA if given, else KAMAL_VERSION (Kamal passes it to every app
+    # container as `--env KAMAL_VERSION=<git sha>`: kamal 2.12.0
+    # lib/kamal/commands/app.rb), else the local checkout, else "unknown": the
+    # production image has no git and no .git directory.
     def git_sha
-      ENV["GIT_SHA"].presence || Open3.capture3("git", "rev-parse", "--short", "HEAD", chdir: Rails.root.to_s).then do |out, _err, status|
+      ENV["GIT_SHA"].presence || ENV["KAMAL_VERSION"].presence || Open3.capture3("git", "rev-parse", "--short", "HEAD", chdir: Rails.root.to_s).then do |out, _err, status|
         status.success? && out.strip.present? ? out.strip : "unknown"
       end
     rescue StandardError

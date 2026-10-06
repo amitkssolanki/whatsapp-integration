@@ -87,7 +87,10 @@ A re-posted delivery therefore never inflates the real duplicate count.
 - Masked admin screenshots per scenario (`DEMO_MASK_PII=1`); phone screenshots from
   participants only with consent; Meta-side screenshots taken by Amit.
 - Sanitized payload samples for any new event shape (run them through
-  `script/sanitize_v1_payloads.rb`-style scrubbing before they enter the repo).
+  `script/sanitize_v1_payloads.rb`-style scrubbing before they enter the repo). The script
+  replaces phone numbers, Meta ids, user ids, names, usernames, free text and order notes
+  (only the empty note and plain greetings survive); re-running it on the archived V1 log
+  reproduces the committed fixtures byte for byte.
 - Git tags `ops-start` and `ops-end` (pushed only with Amit's approval).
 - A final database dump in the private archive.
 

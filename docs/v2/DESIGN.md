@@ -313,6 +313,16 @@ order_id, job_id, error_category. Never log Meta message ids (they embed phone
 numbers), phone numbers (mask to last 4), names, or payload bodies.
 `DEMO_MASK_PII=1` masks phone numbers and names in every admin view.
 
+Error text that leaves a job is stored by Solid Queue in `solid_queue_failed_executions.error`
+(exception class, message, backtrace; solid_queue 1.7.0) and logged by Active Job, so
+`ApplicationJob` re-raises any escaping error with its message scrubbed (`Redact`): same class,
+backtrace and cause chain (retry_on and `InfrastructureError` still match), but no Meta ids or
+phone numbers from, say, a unique-violation DETAIL. Admin pages and the Health snapshot read
+deliveries with `WebhookDelivery.without_bodies`, so neither `raw_body` nor `raw_body_base64` is
+ever loaded for display. `ops:report` records the commit as `GIT_SHA`, else `KAMAL_VERSION`
+(Kamal passes it to every app container, kamal 2.12.0 `lib/kamal/commands/app.rb`), else the
+local git checkout, else `unknown`.
+
 ## 12. Fault injection (operating-period scenarios 4, 6, 7)
 
 `FaultInjection` reads the stored toggles on every check (see below):

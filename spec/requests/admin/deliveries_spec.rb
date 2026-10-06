@@ -104,10 +104,30 @@ RSpec.describe "Admin deliveries", type: :request do
       expect(response.body).not_to include("Replay this delivery")
     end
 
-    it "cannot reach the raw body even by accident" do
+    it "cannot reach the raw body or its base64 twin even by accident" do
       d = delivery
 
-      expect { WebhookDelivery.select(Admin::DeliveriesController::SAFE_COLUMNS).find(d.id).raw_body }.to raise_error(ActiveModel::MissingAttributeError)
+      loaded = WebhookDelivery.select(Admin::DeliveriesController::SAFE_COLUMNS).find(d.id)
+      expect { loaded.raw_body }.to raise_error(ActiveModel::MissingAttributeError)
+      expect { loaded.raw_body_base64 }.to raise_error(ActiveModel::MissingAttributeError)
+      expect(Admin::DeliveriesController::SAFE_COLUMNS).not_to include("raw_body", "raw_body_base64")
+    end
+
+    it "never selects the body columns for the list, the detail page or Health (review 2 #10b)" do
+      body = meta_fixture("order")
+      d = delivery(:failed, raw_body_base64: Base64.strict_encode64(body))
+      queries = []
+      subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") { |*, payload| queries << payload[:sql] }
+
+      [ "/admin/deliveries", "/admin/deliveries/#{d.id}", "/admin/health" ].each { |path| get path }
+      ActiveSupport::Notifications.unsubscribe(subscriber)
+
+      delivery_selects = queries.select { |sql| sql =~ /FROM "webhook_deliveries"/ && sql.start_with?("SELECT") && !sql.include?("COUNT(") }
+      expect(delivery_selects).not_to be_empty
+      delivery_selects.each do |sql|
+        expect(sql).not_to include("raw_body"), sql
+        expect(sql).not_to match(/"webhook_deliveries"\.\*/), sql
+      end
     end
 
     it "404s for a missing delivery" do
