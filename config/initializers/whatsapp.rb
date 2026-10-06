@@ -6,4 +6,12 @@ Rails.application.config.whatsapp = ActiveSupport::OrderedOptions.new.tap do |c|
   c.app_secret = ENV["WHATSAPP_APP_SECRET"]
   c.catalog_id = ENV["CATALOG_ID"]
   c.api_version = ENV.fetch("WHATSAPP_API_VERSION", "v21.0")
+
+  # Skip webhook signature checks. Only ever honored in development and test
+  # (Whatsapp::Signature); production ignores it.
+  c.allow_unsigned = ENV["WHATSAPP_ALLOW_UNSIGNED"] == "1"
+
+  # HTTP Basic credentials for the operator UI.
+  c.admin_user = ENV["ADMIN_USER"]
+  c.admin_password = ENV["ADMIN_PASSWORD"]
 end
