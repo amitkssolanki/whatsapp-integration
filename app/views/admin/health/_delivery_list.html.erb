@@ -5,7 +5,7 @@
   <ul>
     <% listing[:recent].each do |delivery| %>
       <li>
-        <%= link_to "delivery ##{delivery.id}", admin_delivery_path(delivery) %>
+        <%= link_to "delivery ##{delivery.id}", admin_delivery_path(delivery) %><%= synthetic_badge(delivery) %>
         · <%= ago(delivery.received_at) %>
         · <%= outcome_summary(delivery) %>
         <% if delivery.last_error_class.present? %>· <%= delivery.last_error_class %><% end %>

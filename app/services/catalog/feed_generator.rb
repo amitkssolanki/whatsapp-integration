@@ -4,6 +4,8 @@ module Catalog
   # Builds a product feed CSV in the format Meta Commerce Manager expects for
   # a Catalog data source feed.
   #
+  # Synthetic (demo) products are never in the feed.
+  #
   # https://developers.facebook.com/docs/commerce-platform/catalog/fields
   class FeedGenerator
     AVAILABILITY_LABELS = {
@@ -14,7 +16,7 @@ module Catalog
 
     COLUMNS = %w[id title description availability condition price link image_link brand].freeze
 
-    def initialize(products: Product.includes(:category).order(:sku), base_url:)
+    def initialize(products: Product.non_synthetic.includes(:category).order(:sku), base_url:)
       @products = products
       @base_url = base_url
     end

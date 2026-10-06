@@ -13,7 +13,7 @@
     <tbody>
       <% @conversations.each do |conversation| %>
         <tr>
-          <td><%= display_name(conversation.customer) %></td>
+          <td><%= display_name(conversation.customer) %><%= synthetic_badge(conversation.customer) %></td>
           <td><%= display_phone(conversation.customer) %></td>
           <td class="num"><%= @message_counts.fetch(conversation.id, 0) %></td>
           <td class="nowrap"><%= admin_time(conversation.last_message_at) %></td>

@@ -10,6 +10,7 @@ module Admin
     def index
       @filter = WebhookDelivery.statuses.key?(params[:status]) ? params[:status] : "all"
       @counts = WebhookDelivery.group(:status).count
+      @replayable_count = bulk_replayable.count
       scope = WebhookDelivery.without_bodies.order(received_at: :desc, id: :desc)
       scope = scope.where(status: @filter) unless @filter == "all"
       @deliveries = scope.limit(LIST_LIMIT)
@@ -29,11 +30,12 @@ module Admin
     end
 
     # Replays every delivery that is waiting on an operator (failed or only
-    # partly applied) and still has its body. Idempotency keys make each replay safe.
+    # partly applied) and still has its body. Synthetic (demo) deliveries are
+    # skipped. Idempotency keys make each replay safe.
     def replay_failed
       queued = 0
       refused = []
-      WebhookDelivery.where(status: %w[failed partially_failed], purged_at: nil).order(:id).find_each do |delivery|
+      bulk_replayable.order(:id).find_each do |delivery|
         delivery.replay!(by: current_operator)
         queued += 1
       rescue WebhookDelivery::ReplayError, ApplicationJob::EnqueueFailed => error
@@ -46,6 +48,12 @@ module Admin
       else
         redirect_back_or_to admin_deliveries_path, alert: "#{message} Not replayed: #{refused.first(5).join('; ')}"
       end
+    end
+
+    private
+
+    def bulk_replayable
+      WebhookDelivery.non_synthetic.where(status: %w[failed partially_failed], purged_at: nil)
     end
   end
 end

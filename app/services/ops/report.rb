@@ -14,14 +14,15 @@ module Ops
   #
   #   real      only rows that show real platform behaviour: no fault was
   #             injected on them (`injected_faults` empty; this includes
-  #             re-posted deliveries) and, for outbound messages, they do not
-  #             belong to simulated "Demo Customer" customers.
-  #   all       every row, injected and simulated ones included.
+  #             re-posted deliveries), deliveries not flagged synthetic, and
+  #             messages and orders of customers that are neither synthetic
+  #             (demo:seed_integration) nor simulated ("Demo Customer N").
+  #   all       every row, injected, synthetic and simulated ones included.
   #
-  # `injected` summarises what was labeled, by label. Latency comes from real
-  # rows only, so `all[:latency]` is the same as `real[:latency]`. Sections
-  # with no injected or simulated rows (orders, catalog, inbound) are the same
-  # in both.
+  # `injected` summarises what was labeled, by label (synthetic and simulated
+  # rows excluded). Latency comes from real rows only, so `all[:latency]` is
+  # the same as `real[:latency]`. The catalog section has no injected or
+  # synthetic rows and is the same in both.
   #
   # Quote `real` for what the platform did; use `all` to reconcile counts with
   # the database.
@@ -37,10 +38,8 @@ module Ops
     def call
       period = from...to
       shared = {
-        orders: OrdersSection.new(period).call,
         latency: LatencySection.new(period).call,
-        catalog: CatalogSection.new(period).call,
-        inbound: InboundSection.new(period).call
+        catalog: CatalogSection.new(period).call
       }
       {
         period: { from: from.iso8601, to: to.iso8601, generated_at: Time.current.iso8601, git_sha: git_sha },
@@ -58,16 +57,16 @@ module Ops
 
     private
 
-    def sections(period, real:, orders:, latency:, catalog:, inbound:)
+    def sections(period, real:, latency:, catalog:)
       {
         deliveries: DeliveriesSection.new(period, real: real).call,
-        orders: orders,
+        orders: OrdersSection.new(period, real: real).call,
         outbound: OutboundSection.new(period, at: to, real: real).call,
         latency: latency,
         status_anomalies: StatusAnomaliesSection.new(period, real: real).call,
         window: WindowSection.new(period, real: real).call,
         catalog: catalog,
-        inbound: inbound
+        inbound: InboundSection.new(period, real: real).call
       }
     end
 

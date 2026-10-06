@@ -1,4 +1,6 @@
 class Customer < ApplicationRecord
+  include Synthetic
+
   has_one :conversation, dependent: :destroy
   has_many :orders, dependent: :nullify
 
@@ -22,6 +24,9 @@ class Customer < ApplicationRecord
   # run only once the message is known to be new: a replayed or duplicate old
   # message must never overwrite newer customer data.
   #
+  # A customer created while a Demo::Sandbox is entered is synthetic, whoever
+  # asked for it: nothing a demo run creates can pass for real.
+  #
   # Safe when two workers see the same new customer at once: the INSERT uses
   # ON CONFLICT DO NOTHING (on whichever unique index trips) instead of
   # find-then-create, so the loser waits for the winner's commit and reads the
@@ -34,7 +39,7 @@ class Customer < ApplicationRecord
     customer = lookup(number, user_id)
     unless customer
       AppLog.quietly do # the INSERT renders the number and name inline
-        insert({ whatsapp_number: number, wa_user_id: user_id, display_name: display_name.presence })
+        insert({ whatsapp_number: number, wa_user_id: user_id, display_name: display_name.presence, synthetic: Demo::Sandbox.entered? })
       end
       customer = lookup(number, user_id) or raise ActiveRecord::RecordNotFound, "customer vanished after insert"
     end

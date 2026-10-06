@@ -3,10 +3,10 @@
 # what a customer would land on if they tapped through from outside WhatsApp.
 class ProductsController < ApplicationController
   def index
-    @categories = Category.includes(:products)
+    @categories = Category.on_menu.includes(:menu_products)
   end
 
   def show
-    @product = Product.find(params[:id])
+    @product = Product.non_synthetic.find(params[:id])
   end
 end

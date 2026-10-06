@@ -50,7 +50,7 @@ module Orders
 
     def build_lines
       items = Array(@order_payload["product_items"])
-      products = Product.where(sku: items.filter_map { |item| item["product_retailer_id"].to_s.presence if item.is_a?(Hash) }).index_by(&:sku)
+      products = catalog_products.where(sku: items.filter_map { |item| item["product_retailer_id"].to_s.presence if item.is_a?(Hash) }).index_by(&:sku)
 
       items.filter_map { |item| build_line(item, products) }
     end
@@ -90,6 +90,12 @@ module Orders
         catalog_price_cents: product&.price_cents,
         currency: currency || product&.currency || "USD"
       }
+    end
+
+    # A synthetic product exists only for synthetic customers; to everyone else
+    # its SKU is unknown (it is not in the real catalog).
+    def catalog_products
+      @customer.synthetic? ? Product.all : Product.non_synthetic
     end
 
     def check_product(product, sku, price_cents, currency)

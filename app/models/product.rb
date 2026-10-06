@@ -1,4 +1,6 @@
 class Product < ApplicationRecord
+  include Synthetic
+
   belongs_to :category
   has_many :order_items, dependent: :nullify
 
@@ -16,7 +18,8 @@ class Product < ApplicationRecord
   # Products whose current Meta-facing fields differ from what was last
   # confirmed pushed (or that were never pushed). The digest is computed in
   # Ruby, so this scans the table; fine for a restaurant menu.
-  scope :catalog_dirty, -> { where(id: unscoped.select(&:catalog_dirty?).map(&:id)) }
+  # Synthetic products are never pushed (they do not exist in Meta's catalog).
+  scope :catalog_dirty, -> { where(id: unscoped.non_synthetic.select(&:catalog_dirty?).map(&:id)) }
 
   # Debounced push: wait CatalogPushJob::DEBOUNCE, then the job sends every
   # dirty product at once. Duplicate enqueues from a burst of edits are fine
@@ -48,6 +51,7 @@ class Product < ApplicationRecord
   private
 
   def enqueue_catalog_push
+    return if synthetic?
     return unless Rails.application.config.whatsapp.catalog_sync_enabled
     return if (saved_changes.keys & Catalog::Fields::PRODUCT_ATTRIBUTES).empty?
 

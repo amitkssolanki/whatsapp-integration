@@ -2,7 +2,7 @@
 <%# The override form holds a checkbox someone may be ticking; do not reload under them. %>
 <% live_refresh unless @messages.any?(&:blocked?) %>
 <p><%= link_to "← All conversations", admin_conversations_path, class: "muted" %></p>
-<h1><%= display_name(@conversation.customer) %></h1>
+<h1><%= display_name(@conversation.customer) %><%= synthetic_badge(@conversation.customer) %></h1>
 <p class="muted"><%= display_phone(@conversation.customer) %>
   <% if @orders.any? %>· orders:
     <% @orders.each do |order| %><%= link_to "##{order.id}", admin_order_path(order) %> <% end %>

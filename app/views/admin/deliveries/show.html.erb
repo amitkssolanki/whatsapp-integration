@@ -1,7 +1,7 @@
 <% content_for :title, "Admin · Delivery ##{@delivery.id}" %>
 <% live_refresh %>
 <p><%= link_to "← All deliveries", admin_deliveries_path, class: "muted" %></p>
-<h1>Delivery #<%= @delivery.id %> <%= delivery_status_badge(@delivery) %></h1>
+<h1>Delivery #<%= @delivery.id %> <%= delivery_status_badge(@delivery) %><%= synthetic_badge(@delivery) %></h1>
 
 <div class="card">
   <dl class="kv">
@@ -30,6 +30,9 @@
       <dt>Raw body</dt><dd><%= badge("purged", "neutral") %> removed <%= admin_time(@delivery.purged_at) %>; cannot be replayed</dd>
     <% end %>
   </dl>
+  <% if @delivery.synthetic? %>
+    <p class="muted">A synthetic delivery cannot be replayed: it was never sent by Meta.</p>
+  <% end %>
   <% if @delivery.replayable? %>
     <p><%= button_to "Replay this delivery", replay_admin_delivery_path(@delivery), method: :post, class: "btn btn-warn" %></p>
   <% end %>

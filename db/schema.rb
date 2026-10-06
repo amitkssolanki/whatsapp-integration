@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_000026) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_000027) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -56,6 +56,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_000026) do
     t.string "wa_user_id"
     t.datetime "purged_at"
     t.boolean "purged_had_phone"
+    t.boolean "synthetic", default: false, null: false
+    t.index ["synthetic"], name: "index_customers_on_synthetic"
     t.index ["wa_user_id"], name: "index_customers_on_wa_user_id", unique: true, where: "(wa_user_id IS NOT NULL)"
     t.index ["whatsapp_number"], name: "index_customers_on_whatsapp_number", unique: true, where: "(whatsapp_number IS NOT NULL)"
     t.check_constraint "whatsapp_number IS NOT NULL OR wa_user_id IS NOT NULL", name: "customers_identity_present"
@@ -155,8 +157,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_000026) do
     t.string "catalog_synced_digest"
     t.datetime "catalog_synced_at"
     t.text "catalog_sync_error"
+    t.boolean "synthetic", default: false, null: false
     t.index ["category_id"], name: "index_products_on_category_id"
     t.index ["sku"], name: "index_products_on_sku", unique: true
+    t.index ["synthetic"], name: "index_products_on_synthetic"
   end
 
   create_table "solid_queue_batch_executions", force: :cascade do |t|
@@ -333,9 +337,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_000026) do
     t.text "raw_body_base64"
     t.datetime "purged_at"
     t.string "injected_faults", default: [], null: false, array: true
+    t.boolean "synthetic", default: false, null: false
     t.index ["body_sha256"], name: "index_webhook_deliveries_on_body_sha256"
     t.index ["received_at"], name: "index_webhook_deliveries_on_received_at"
     t.index ["status", "received_at"], name: "index_webhook_deliveries_on_status_and_received_at"
+    t.index ["synthetic"], name: "index_webhook_deliveries_on_synthetic"
   end
 
   add_foreign_key "conversations", "customers"

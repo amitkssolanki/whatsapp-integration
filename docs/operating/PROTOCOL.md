@@ -67,6 +67,46 @@ out of its `real` numbers. In production they work only with `FAULT_INJECTION_AL
 Changing `FAULT_INJECTION_ALLOWED`, `CATALOG_SYNC_ENABLED` or `DEMO_MASK_PII` needs a redeploy
 (RUNBOOK section 3): do it when Health shows `sending: 0`.
 
+## Synthetic data (the seeded operator UI)
+
+A fresh deployment has an empty operator UI. `bin/rails demo:seed_integration CONFIRM=yes`
+(run it inside the production app container; docs/deploy/RUNBOOK.md has the deployment commands)
+fills it with **clearly synthetic** data. It is safe next to the real Meta token, but it is
+not evidence: **never quote it, never screenshot it as if real, and never put it in the
+scenario log.** Everything it creates is flagged `synthetic` (customers named "Demo Customer N"
+with numbers in the fictional 1 555 010 xxxx range, deliveries, `sim.in.N` / `sim.out.N` message ids,
+DEMO-* products in the category "Demo items (synthetic)") and shows a "synthetic" badge in the admin.
+
+- **What it does.** Removes all earlier synthetic data, then plays 12 scenarios through the real
+  webhook controller, jobs and state machines: greeting and catalog card, clean order accepted,
+  price mismatch, unknown SKU, unavailable product, invalid quantity (all four needing review),
+  a permanent send failure (fake 131026), a blocked send outside the 24h window, an ambiguous
+  send left `unknown`, a duplicate status, an injected processing failure replayed inside the
+  run, and a rejected order. Timestamps are spread over the last days. Reruns give the same counts.
+- **How it stays safe.** It runs in-process only: WhatsApp and catalog requests are answered by an
+  in-process fake, the token / phone number id / webhook signing secret are run-local fakes (the
+  real ones are restored afterwards), Solid Queue is not used, fault injection is a
+  process-local override (the stored toggles on the Health page are neither read nor written), and
+  `Net::HTTP` cannot connect while it runs. It runs in one transaction and rolls everything back,
+  raising, unless the end state holds: no synthetic outbound message pending/sending/retry_scheduled,
+  no Solid Queue job for it, no network attempt, only synthetic customers, deliveries and products.
+  Without `CONFIRM=yes` it prints what it would replace and changes nothing. It never selects a
+  non-synthetic row.
+- **Guards that always hold for synthetic rows** (also when nobody runs the seed): `SendMessageJob`
+  never sends to a synthetic customer (the message fails with `synthetic_recipient`, which is not
+  retryable and not resendable; log `send.synthetic_refused`); a synthetic delivery cannot be replayed
+  (`webhook.replay_refused` reason `synthetic`; the admin hides Replay and bulk replay skips it);
+  synthetic products are excluded from the public menu, the CSV feed, catalog push (including
+  Sync now) and reconcile, and never trigger the debounced push; a real customer ordering a
+  DEMO-* SKU gets `unknown_sku`. Separately, `WhatsappClient` refuses, without any HTTP, to send
+  when the phone number id is missing or not all digits.
+- **In the numbers.** `ops:report` leaves synthetic data out of every `real` section (and out of
+  the `injected` summary); `all` still counts it, so the report reconciles with the database.
+- **Removing it.** `bin/rails demo:purge_synthetic CONFIRM=yes` deletes exactly the synthetic
+  rows (the same code as the seed's reset) and leaves everything else untouched. The old
+  "Jordan (demo)" customer that `db:seed` used to create is flagged synthetic by the migration
+  that added the flag; the seed no longer creates demo customers.
+
 ## Metrics
 
 `bin/rails ops:report FROM=… TO=… FORMAT=md` produces every metric from the database.
@@ -74,7 +114,9 @@ Medians and ranges only; no percentiles on small samples.
 
 Every section is computed twice. **`real`** counts only rows that show real platform
 behavior: nothing with an injected fault or a re-post (`injected_faults` not empty) and, for
-outbound messages, nothing sent to simulated "Demo Customer" customers. **`all`** counts every
+outbound messages, nothing sent to simulated "Demo Customer" customers, and, since
+`demo:seed_integration`, nothing synthetic: no deliveries flagged `synthetic`, no messages or
+orders of synthetic customers. **`all`** counts every
 row. An **`injected`** summary lists how many rows carry each label. Quote `real` in results
 (duplicates, failures, retries, unknowns, error categories); latency comes from real rows only.
 The Markdown output shows `real` first, then `all`, then the injected summary.

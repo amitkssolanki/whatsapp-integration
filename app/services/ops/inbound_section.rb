@@ -3,8 +3,8 @@ module Ops
   # that was. Customers known only by business-scoped user id (Meta omitted
   # their phone number) are counted but never identified.
   class InboundSection
-    def initialize(period)
-      @scope = Message.inbound.where(created_at: period)
+    def initialize(period, real: false)
+      @scope = Scopes.inbound(period, real: real)
     end
 
     def call

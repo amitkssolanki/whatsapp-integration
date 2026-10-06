@@ -165,4 +165,13 @@ RSpec.describe Whatsapp::ErrorClassifier do
       expect(raised_by_adapter(Net::OpenTimeout.new)).not_to be_a(Faraday::TimeoutError)
     end
   end
+
+  describe "synthetic_recipient" do
+    it "is neither retryable nor ambiguous, and no operator may resend it" do
+      expect(described_class::SYNTHETIC_RECIPIENT).to eq("synthetic_recipient")
+      expect(described_class.retryable?("synthetic_recipient")).to be(false)
+      expect(Message::RESENDABLE_ERROR_CATEGORIES).not_to include("synthetic_recipient")
+      expect(described_class::CODE_CATEGORIES.keys).not_to include("synthetic_recipient") # no Meta code maps to it
+    end
+  end
 end

@@ -63,6 +63,16 @@ module AdminHelper
     tag.span(text, class: "badge badge-#{tone}")
   end
 
+  # Marks a customer, product or webhook delivery created by demo:seed_integration,
+  # so nobody mistakes it for real traffic. Nothing for a real record; the badge
+  # carries its own leading space.
+  def synthetic_badge(record)
+    return unless record&.synthetic?
+
+    safe_join([ " ", tag.span("synthetic", class: "badge badge-synthetic",
+                                          title: "Created by demo:seed_integration. Not real traffic: never sent to Meta, excluded from the real metrics.") ])
+  end
+
   # The message's delivery state: tick, label, and whatever else an operator needs
   # to understand it (the error, the next retry).
   def message_state(message)
