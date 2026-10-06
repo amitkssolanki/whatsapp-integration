@@ -27,8 +27,16 @@ module Ops
         outbound: OutboundSection.new(period, at: to).call,
         latency: LatencySection.new(period).call,
         status_anomalies: StatusAnomaliesSection.new(period).call,
-        window: WindowSection.new(period).call
+        window: WindowSection.new(period).call,
+        catalog: CatalogSection.new(period).call,
+        inbound: InboundSection.new(period).call
       }
+    end
+
+    # A compact human-readable summary (tables) of the same numbers; pass an
+    # already computed result to avoid querying twice.
+    def to_markdown(data = call)
+      MarkdownRenderer.new(data).render
     end
 
     private
