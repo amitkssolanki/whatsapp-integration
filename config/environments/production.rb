@@ -33,19 +33,13 @@ Rails.application.configure do
   config.ssl_options = { redirect: { exclude: ->(request) { request.path == "/up" } } }
 
   # Log to STDOUT (Docker collects it; rotation is configured in config/deploy.yml),
-  # one JSON object per line, with the current request id as a log tag.
+  # one JSON object per line. Tags go out as a `tags` array; request_id and job_id
+  # are lifted from them (see JsonLogFormatter).
+  require_relative "../../lib/json_log_formatter"
   config.log_tags = [ :request_id ]
   config.colorize_logging = false
   config.logger = ActiveSupport::TaggedLogging.logger(STDOUT).tap do |logger|
-    logger.formatter = Class.new(::Logger::Formatter) do
-      include ActiveSupport::TaggedLogging::Formatter
-
-      def call(severity, time, _progname, message)
-        line = { time: time.utc.iso8601(3), level: severity, message: msg2str(message).strip }
-        line[:request_id] = current_tags.first if current_tags.any?
-        "#{JSON.generate(line)}\n"
-      end
-    end.new
+    logger.formatter = JsonLogFormatter.new
   end
 
   # Change to "debug" to log everything (including potentially personally-identifiable information!).
