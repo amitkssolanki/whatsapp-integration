@@ -108,7 +108,9 @@ failed 4, ignored 5, unparseable 6`.
 received|failed|partially_failed|processed → processing; processing → processed |
 partially_failed | failed | ignored. unparseable and ignored are terminal. processed →
 processing only via operator replay. StallSweeper: processing older than 10 minutes →
-failed (error "stalled").
+failed (error "stalled"); while attempts < 3 the sweeper also re-enqueues it. The sweeper re-enqueues
+deliveries stuck in `received` for 5 minutes and outbound messages stuck in `pending` for 10
+(job claims make duplicate jobs harmless).
 
 **Message (outbound):** `pending 10, sending 20, retry_scheduled 25, accepted 30,
 sent 40, delivered 50, read 60, failed 90, blocked 91, unknown 92`; inbound rows are

@@ -4,8 +4,9 @@ production: &recurring
     command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
     schedule: every hour at minute 12
 
-  # Moves deliveries stuck in `processing` to failed and sends stuck in
-  # `sending` to unknown (see StallSweeperJob).
+  # Self-healing: re-enqueues lost webhook and send jobs, fails (and retries up to
+  # 3 times) deliveries stuck in `processing`, and moves sends stuck in `sending`
+  # to unknown (see StallSweeperJob).
   stall_sweeper:
     class: StallSweeperJob
     schedule: every 5 minutes
