@@ -115,6 +115,7 @@ module Health
     def listing(scope)
       recent = scope.limit(RECENT_LIMIT)
       recent = recent.without_bodies if scope.klass == WebhookDelivery # never load raw bodies just to list deliveries
+      recent = recent.includes(conversation: :customer) if scope.klass == Message # the list marks synthetic customers
       { count: scope.count, recent: recent.to_a }
     end
   end

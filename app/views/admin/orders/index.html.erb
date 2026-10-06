@@ -22,7 +22,7 @@
         <tr>
           <td>#<%= order.id %></td>
           <td class="nowrap"><%= admin_time(order.created_at) %></td>
-          <td><%= display_name(order.customer) %><br><span class="muted"><%= display_phone(order.customer) %></span></td>
+          <td><%= display_name(order.customer) %><%= synthetic_badge(order.customer) %><br><span class="muted"><%= display_phone(order.customer) %></span></td>
           <td class="num"><%= order.order_items.sum(&:quantity) %></td>
           <td class="num"><%= cents_to_money(order.total_cents) %></td>
           <td><%= review_badge(order) %></td>

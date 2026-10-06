@@ -14,7 +14,7 @@
   <tbody>
     <% @products.each do |product| %>
       <tr id="product-<%= product.id %>">
-        <td><%= product.sku %></td>
+        <td><%= product.sku %><%= synthetic_badge(product) %></td>
         <td><%= product.synthetic? ? product.name : link_to(product.name, product_path(product)) %></td>
         <td><%= product.category.name %></td>
         <td class="num"><%= product.formatted_price %></td>

@@ -24,7 +24,7 @@
     <tbody>
       <% @deliveries.each do |delivery| %>
         <tr>
-          <td>#<%= delivery.id %></td>
+          <td>#<%= delivery.id %><%= synthetic_badge(delivery) %></td>
           <td class="nowrap"><%= admin_time(delivery.received_at, seconds: true) %></td>
           <td><%= delivery_status_badge(delivery) %></td>
           <td><%= item_counts_text(delivery) %></td>

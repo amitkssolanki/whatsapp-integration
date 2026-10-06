@@ -1,7 +1,7 @@
 <% content_for :title, "Admin · Order ##{@order.id}" %>
 <% live_refresh unless @order.received? %>
 <p><%= link_to "← All orders", admin_orders_path, class: "muted" %></p>
-<h1>Order #<%= @order.id %> <%= order_status_badge(@order) %> <%= review_badge(@order) %></h1>
+<h1>Order #<%= @order.id %> <%= order_status_badge(@order) %> <%= review_badge(@order) %><%= synthetic_badge(@order.customer) %></h1>
 <p class="muted">
   <%= @conversation ? link_to(display_name(@order.customer), admin_conversation_path(@conversation)) : display_name(@order.customer) %>
   · <%= display_phone(@order.customer) %>
