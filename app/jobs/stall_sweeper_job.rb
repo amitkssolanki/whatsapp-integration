@@ -37,7 +37,7 @@ class StallSweeperJob < ApplicationJob
       next if live_job?(ProcessWebhookDeliveryJob, delivery.id)
 
       guarded("sweeper.delivery_requeue_failed", delivery_id: delivery.id) do
-        enqueue(ProcessWebhookDeliveryJob, delivery.id)
+        enqueue_job(ProcessWebhookDeliveryJob, delivery.id)
         AppLog.event("sweeper.delivery_requeued", delivery_id: delivery.id, status: delivery.status, attempts: delivery.attempts)
       end
     end
@@ -53,7 +53,7 @@ class StallSweeperJob < ApplicationJob
           next unless delivery.transition!(:failed, last_error_class: "Stalled", last_error_message: "stalled", processed_at: Time.current)
 
           retry_now = delivery.attempts < MAX_DELIVERY_ATTEMPTS
-          enqueue(ProcessWebhookDeliveryJob, delivery.id) if retry_now
+          enqueue_job(ProcessWebhookDeliveryJob, delivery.id) if retry_now
           AppLog.event("sweeper.delivery_stalled", delivery_id: delivery.id, attempts: delivery.attempts, retried: retry_now)
         end
       end
@@ -67,7 +67,7 @@ class StallSweeperJob < ApplicationJob
       next if live_job?(SendMessageJob, message.id)
 
       guarded("sweeper.send_requeue_failed", message_id: message.id) do
-        enqueue(SendMessageJob, message.id)
+        enqueue_job(SendMessageJob, message.id)
         AppLog.event("sweeper.send_requeued", message_id: message.id)
       end
     end
@@ -83,7 +83,9 @@ class StallSweeperJob < ApplicationJob
     end
   end
 
-  def enqueue(job_class, id)
+  # Not named `enqueue`: that would override ActiveJob::Base#enqueue, which
+  # perform_later and retries call on this very job.
+  def enqueue_job(job_class, id)
     job_class.perform_later(id) || raise(ApplicationJob::EnqueueFailed, job_class.name)
   end
 
