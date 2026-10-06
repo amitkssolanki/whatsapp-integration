@@ -1,0 +1,41 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "100000000000002",
+      "changes": [
+        {
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550100003",
+              "phone_number_id": "100000000000003"
+            },
+            "contacts": [
+              {
+                "wa_id": "15550100004",
+                "user_id": "US.1000000000000002"
+              }
+            ],
+            "statuses": [
+              {
+                "id": "wamid.HBgLMTU1NTAxMDAwMDEFQIAERgS39WSL1qpRB6V0h7Vi7nyIJoAAA==",
+                "status": "sent",
+                "timestamp": "1786174613",
+                "recipient_id": "15550100004",
+                "recipient_user_id": "US.1000000000000002",
+                "pricing": {
+                  "billable": false,
+                  "pricing_model": "PMP",
+                  "category": "service",
+                  "type": "free_customer_service"
+                }
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}
