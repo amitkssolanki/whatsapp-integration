@@ -2,8 +2,8 @@ module Ops
   # Orders created in the period: how clean they arrived, why they were
   # flagged, and how long operators took to decide.
   class OrdersSection
-    def initialize(period)
-      @scope = Order.where(created_at: period)
+    def initialize(period, real: false)
+      @scope = Scopes.orders(period, real: real)
     end
 
     def call

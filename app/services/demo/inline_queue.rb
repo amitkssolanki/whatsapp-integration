@@ -25,6 +25,9 @@ module Demo
 
     def enqueue_after_transaction_commit? = false
 
+    # True when no job, due or delayed, is waiting.
+    def empty? = @pending.empty?
+
     def scheduled? = @pending.any? { |_data, at| at }
 
     # Runs every job that is due, including the ones those jobs enqueue. With

@@ -25,9 +25,13 @@ module Catalog
       def retryable? = RETRYABLE_CATEGORIES.include?(category)
     end
 
+    # The Faraday adapter (plus args) used when none is given. Specs and
+    # Demo::Sandbox replace it so no request can leave the process.
+    class_attribute :adapter, default: [ Faraday.default_adapter ]
+
     # The Faraday stack with the production timeouts. `adapter` is the argument
     # list for Faraday's `adapter` (specs pass [:test, stubs]).
-    def self.build_connection(adapter: [ Faraday.default_adapter ])
+    def self.build_connection(adapter: self.adapter)
       Faraday.new(url: GRAPH_URL, request: { open_timeout: 3, timeout: 15 }) do |f|
         f.request :url_encoded
         f.adapter(*adapter)

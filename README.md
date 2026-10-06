@@ -301,7 +301,8 @@ bin/brakeman --no-pager && bin/bundler-audit
 (`rspec` against PostgreSQL 17). `bin/rails ops:report FROM=2026-10-20
 TO=2026-11-10 FORMAT=md` prints delivery, order, outbound, latency, status
 anomaly, window, catalog and inbound metrics computed only from the database,
-twice: `real` (rows with no injected fault and no simulated demo customer) and `all`, plus
+twice: `real` (rows with no injected fault, nothing synthetic or simulated: see
+`demo:seed_integration` below) and `all`, plus
 an `injected` summary by label. `bin/rails ops:repost_delivery ID=… CONFIRM=yes` re-ingests
 a stored delivery's exact bytes as a new delivery labeled `injected:repost` (scenario 3), so
 it never counts as one of Meta's own duplicates.
@@ -322,6 +323,30 @@ Operating tools (`docs/operating/PROTOCOL.md`):
   webhooks through the real controller, an in-process fake Graph API. It runs
   only in development and only against a database whose name contains `_demo`:
   `DATABASE_URL=postgres:///whatsapp_integration_demo bin/rails db:prepare db:seed demo:simulate`.
+- `bin/rails demo:seed_integration CONFIRM=yes` fills the operator UI with clearly
+  **synthetic** traffic so a fresh deployment is not empty. Unlike `demo:simulate` it is safe
+  in ANY environment, production included, next to the real token (without `CONFIRM=yes` it
+  prints what it would replace and changes nothing). It first removes all earlier synthetic
+  data, then plays 12 scenarios (greeting and catalog card, clean order accepted, price
+  mismatch, unknown SKU, unavailable product, invalid quantity, permanent send failure,
+  ambiguous send, duplicate status, injected failure and replay, rejected order, send blocked
+  by the 24h window) through the real webhook controller and jobs, with timestamps spread
+  over the last days. Everything it creates is flagged `synthetic` (customers "Demo Customer
+  N" with 1 555 010 xxxx numbers, `sim.in.N` / `sim.out.N` message ids, DEMO-* products in the
+  category "Demo items (synthetic)") and carries a "synthetic" badge in the admin. It runs
+  entirely in-process in one transaction: WhatsApp and catalog calls go to an in-process fake,
+  the token, phone number id and signing secret are run-local fakes, Solid Queue is not used,
+  fault injection is a process-local override (the stored toggles are neither read nor
+  written), and Net::HTTP cannot connect. It rolls everything back, raising, unless the end
+  state holds: no outbound message in flight, no Solid Queue job, no network attempt, only
+  synthetic customers, deliveries and products. Same counts on every run.
+  `bin/rails demo:purge_synthetic CONFIRM=yes` removes exactly that data and nothing else.
+  Guards that hold in production for synthetic data at all times: `SendMessageJob` never
+  sends to a synthetic customer (the message fails with the non-resendable category
+  `synthetic_recipient`, Meta is not called), a synthetic delivery cannot be replayed
+  (the admin hides Replay, bulk replay skips it), synthetic products stay out of the public
+  menu, the CSV feed, catalog push and reconcile, `ops:report`'s `real` sections leave all of
+  it out, and `WhatsappClient` refuses (no HTTP) a missing or non-numeric phone number id.
 - `bin/rails ops:purge BEFORE=YYYY-MM-DD CONFIRM=yes` (alias `ops:purge_payloads`) removes
   raw webhook bodies, message text, Meta message ids, order notes and customers' names and
   phone numbers for records older than the date; counts and statuses stay. It skips, and

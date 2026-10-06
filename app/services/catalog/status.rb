@@ -20,7 +20,7 @@ module Catalog
         last_reconcile_run: last_reconcile,
         dirty_count: Product.catalog_dirty.count,
         drift_count: drift_count(CatalogSyncRun.reconciles.where(status: "succeeded").order(:created_at, :id).last),
-        failing_products: Product.where.not(catalog_sync_error: [ nil, "" ]).order(:sku).to_a
+        failing_products: Product.non_synthetic.where.not(catalog_sync_error: [ nil, "" ]).order(:sku).to_a
       )
     end
 

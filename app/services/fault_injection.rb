@@ -29,11 +29,32 @@ module FaultInjection
   # The toggles that are set, whether or not they are known or allowed:
   # stored ones, plus FAULT_INJECT in development and test.
   def self.requested(env = ENV)
+    return @override.dup if @override
+
     (stored + (Rails.env.local? ? parse(env["FAULT_INJECT"]) : [])).uniq
   end
 
   def self.allowed?(env = ENV)
+    return true if @override
+
     Rails.env.local? || (Rails.env.production? && env["FAULT_INJECTION_ALLOWED"] == "1")
+  end
+
+  # A PROCESS-LOCAL override, for Demo::Sandbox only: while the block runs, the
+  # toggles are exactly `kinds` (none for []), whatever the database, the
+  # environment or FAULT_INJECTION_ALLOWED say, and nothing is written to
+  # OpsSetting. Other processes (the web server, the workers) never see it, so
+  # the operator's stored toggles are neither read nor changed.
+  def self.with_override(kinds)
+    kinds = Array(kinds).map(&:to_s)
+    unknown = kinds - KINDS
+    raise ArgumentError, "unknown fault kind: #{unknown.join(', ')}" if unknown.any?
+
+    previous = @override
+    @override = kinds
+    yield
+  ensure
+    @override = previous
   end
 
   # Toggles that will actually fire.

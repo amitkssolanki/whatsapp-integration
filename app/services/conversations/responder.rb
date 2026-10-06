@@ -84,7 +84,8 @@ module Conversations
 
     # A signature dish to feature on the catalog card; any in-stock product otherwise.
     def featured_product_sku
-      Product.in_stock.find_by(sku: "MAI-006")&.sku || Product.in_stock.order(:id).first&.sku
+      products = Demo::Sandbox.active? ? Product.in_stock : Product.in_stock.non_synthetic # a synthetic SKU is not in Meta's catalog
+      products.find_by(sku: "MAI-006")&.sku || products.order(:id).first&.sku
     end
   end
 end

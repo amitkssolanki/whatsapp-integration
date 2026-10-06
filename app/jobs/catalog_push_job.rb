@@ -57,7 +57,7 @@ class CatalogPushJob < ApplicationJob
   def retry_run(run)
     return unless run && run.kind == "push" && run.status == "queued"
 
-    products = Product.where(sku: run.requested_digests.keys).order(:sku).to_a
+    products = Product.non_synthetic.where(sku: run.requested_digests.keys).order(:sku).to_a
     return run.finish("failed", error_message: "no products left to push") if products.empty?
 
     payload = build_payload(products)
@@ -66,7 +66,7 @@ class CatalogPushJob < ApplicationJob
   end
 
   def candidates(full)
-    products = full ? Product.order(:sku).to_a : Product.catalog_dirty.order(:sku).to_a
+    products = full ? Product.non_synthetic.order(:sku).to_a : Product.catalog_dirty.order(:sku).to_a
     return products if full
 
     in_flight = in_flight_digests

@@ -34,6 +34,7 @@ module Webhooks
         signature_header: @signature_header,
         request_id: @request_id,
         received_at: Time.current,
+        synthetic: Demo::Sandbox.entered?, # everything created inside a demo sandbox is synthetic, by construction
         object_type: payload&.object_type,
         phone_number_id: payload&.phone_number_id(preferring: @config.phone_number_id),
         item_counts: payload ? payload.item_counts : {}

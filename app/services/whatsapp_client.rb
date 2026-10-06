@@ -7,7 +7,8 @@ require "json"
 # It NEVER raises for an API or transport problem: a 4xx/5xx, a timeout and a
 # refused connection all come back as an error Result, already classified
 # (docs/v2/DESIGN.md §7) so the caller only has to act on it. Missing
-# configuration is also a Result (no HTTP call is made).
+# configuration (a missing token, a missing or non-numeric phone number id) is
+# also a Result (no HTTP call is made).
 #
 # Never logs bodies, phone numbers or Meta ids: AppLog events carry our own
 # message id, the HTTP status, Meta's error code and the category.
@@ -39,7 +40,8 @@ class WhatsappClient
   #              {"type"=>"catalog_message","body"=>...,"thumbnail_product_retailer_id"=>...}
   # callback_id: our messages.id; Meta echoes it on status webhooks (best effort)
   def send_message(recipient:, request:, callback_id:)
-    return config_error unless @config.token.present? && @config.phone_number_id.present?
+    return phone_number_id_error unless phone_number_id_valid?
+    return config_error unless @config.token.present?
 
     payload = build_payload(recipient, request, callback_id)
     return payload if payload.is_a?(Result)
@@ -157,6 +159,17 @@ class WhatsappClient
   def from_exception(error)
     classification = Whatsapp::ErrorClassifier.classify_exception(error)
     error_result(title: error.class.name, category: classification.category)
+  end
+
+  # The id goes straight into the request path, so anything but digits (a blank
+  # value, a stray space or slash, a pasted URL) never reaches the network.
+  def phone_number_id_valid?
+    @config.phone_number_id.to_s.match?(/\A\d+\z/)
+  end
+
+  def phone_number_id_error
+    error_result(title: "phone number id missing or malformed", details: "WHATSAPP_PHONE_NUMBER_ID must be the numeric id from Meta; no request was made",
+                 category: "auth_config")
   end
 
   def config_error
