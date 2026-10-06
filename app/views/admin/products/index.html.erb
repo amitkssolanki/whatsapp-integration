@@ -1,23 +1,28 @@
-<% content_for :title, "Admin · Menu" %>
-  <h1>Menu (feeds the WhatsApp Catalog)</h1>
-  <p class="muted">
-    Sanity-check against <code><%= catalog_feed_url %></code> — this is exactly
-    what Meta Commerce Manager should be pulling in.
-  </p>
+<% content_for :title, "Admin · Products" %>
+<% live_refresh %>
+<h1>Menu (feeds the WhatsApp Catalog)</h1>
+<p class="muted">
+  Sanity-check against <code><%= catalog_feed_url %></code>, the CSV feed Meta Commerce Manager can pull.
+  Sync is <%= Rails.application.config.whatsapp.catalog_sync_enabled ? "on" : "off (CATALOG_SYNC_ENABLED)" %>;
+  see the <%= link_to "Health page", admin_health_path %> for runs and drift.
+</p>
 
-  <table>
-    <thead>
-      <tr><th>SKU</th><th>Name</th><th>Category</th><th>Price</th><th>Availability</th></tr>
-    </thead>
-    <tbody>
-      <% @products.each do |product| %>
-        <tr>
-          <td><%= product.sku %></td>
-          <td><%= link_to product.name, product_path(product) %></td>
-          <td><%= product.category.name %></td>
-          <td><%= product.formatted_price %></td>
-          <td><span class="badge <%= "out" unless product.in_stock? %>"><%= product.availability.tr("_", " ") %></span></td>
-        </tr>
-      <% end %>
-    </tbody>
-  </table>
+<table>
+  <thead>
+    <tr><th>SKU</th><th>Name</th><th>Category</th><th class="num">Price</th><th>Availability</th><th>Synced?</th><th>Last synced</th><th>Sync error</th></tr>
+  </thead>
+  <tbody>
+    <% @products.each do |product| %>
+      <tr id="product-<%= product.id %>">
+        <td><%= product.sku %></td>
+        <td><%= link_to product.name, product_path(product) %></td>
+        <td><%= product.category.name %></td>
+        <td class="num"><%= product.formatted_price %></td>
+        <td><span class="badge <%= "out" unless product.in_stock? %>"><%= product.availability.tr("_", " ") %></span></td>
+        <td><%= product.catalog_dirty? ? badge("not synced", "warn") : badge("synced", "ok") %></td>
+        <td class="nowrap"><%= admin_time(product.catalog_synced_at) %></td>
+        <td class="pre"><%= scrub_ids(product.catalog_sync_error).truncate(200) if product.catalog_sync_error.present? %></td>
+      </tr>
+    <% end %>
+  </tbody>
+</table>
