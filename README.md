@@ -15,14 +15,16 @@ doesn't run an LLM; it's a feed + webhook integration.
 
 - `GET /catalog/feed.csv` — the product feed Meta Commerce Manager polls
   ([`Catalog::FeedGenerator`](app/services/catalog/feed_generator.rb)).
-- `GET/POST /webhooks/whatsapp` — webhook verification handshake + inbound
-  message handling ([`Webhooks::WhatsappController`](app/controllers/webhooks/whatsapp_controller.rb),
-  [`Webhooks::WhatsappMessageProcessor`](app/services/webhooks/whatsapp_message_processor.rb)).
+- `GET/POST /webhooks/whatsapp` — webhook verification handshake + intake
+  ([`Webhooks::WhatsappController`](app/controllers/webhooks/whatsapp_controller.rb)
+  verifies, stores the raw delivery and enqueues; the work happens in
+  [`ProcessWebhookDeliveryJob`](app/jobs/process_webhook_delivery_job.rb). See
+  [docs/v2/DESIGN.md](docs/v2/DESIGN.md)).
 - `/` — public menu page (also the feed's per-product `link` target).
 - `/admin/conversations`, `/admin/orders`, `/admin/products` — plain,
   unauthenticated views to watch the demo happen live. **Do not deploy this
-  as-is** — the admin section and the webhook's optional signature bypass
-  have no auth; add both before this touches the public internet for real.
+  as-is** — the admin section has no auth yet (webhooks fail closed without
+  `WHATSAPP_APP_SECRET`).
 
 ## Local setup
 

@@ -4,13 +4,21 @@ class Customer < ApplicationRecord
 
   validates :whatsapp_number, presence: true, uniqueness: true
 
-  # Finds the customer for an inbound webhook, creating one (and its
-  # conversation) on first contact.
-  def self.find_or_create_by_whatsapp_number!(number, display_name: nil)
-    customer = find_or_create_by!(whatsapp_number: number) do |c|
-      c.display_name = display_name
+  # Finds or creates the customer (and its conversation) for an inbound
+  # webhook. Safe when two workers see the same new customer at once: the
+  # INSERTs use ON CONFLICT DO NOTHING instead of find-then-create, so the
+  # loser waits for the winner's commit and reads the winner's row.
+  def self.resolve!(whatsapp_number:, display_name: nil, wa_user_id: nil)
+    AppLog.quietly do # the INSERT renders the number and name inline
+      insert({ whatsapp_number: whatsapp_number, display_name: display_name, wa_user_id: wa_user_id },
+             unique_by: :whatsapp_number)
     end
-    customer.create_conversation! unless customer.conversation
+    customer = find_by!(whatsapp_number: whatsapp_number)
+
+    fresh = { display_name: display_name.presence, wa_user_id: wa_user_id.presence }.compact
+    customer.update!(fresh) if fresh.any? { |attr, value| customer[attr] != value }
+
+    Conversation.insert({ customer_id: customer.id }, unique_by: :customer_id)
     customer
   end
 end

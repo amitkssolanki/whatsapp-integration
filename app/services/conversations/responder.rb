@@ -1,48 +1,71 @@
 module Conversations
-  # Handles inbound free-text messages with a small set of canned replies.
+  # Decides WHAT to say back; it never sends anything. The webhook handler
+  # persists each decision as a pending outbound message and SendMessageJob
+  # delivers it later.
+  #
   # Deliberately not an LLM/tool-calling agent (that's the voice receptionist's
-  # job) — here the WhatsApp Catalog UI does the "browsing", so all this needs
-  # to do is greet and point people at it.
+  # job): the WhatsApp Catalog UI does the "browsing", so all this needs to do
+  # is greet and point people at it.
   class Responder
     GREETING_KEYWORDS = %w[hi hello hey menu start].freeze
 
-    def initialize(client: WhatsappClient.new)
-      @client = client
+    # purpose:         what the message is for (stored on the row)
+    # idempotency_key: one logical reply, one row, however often the inbound is reprocessed
+    # message_type:    the messages.message_type column ("text" or "interactive")
+    # request:         what SendMessageJob will send: type "text" or "catalog_message"
+    Reply = Data.define(:purpose, :idempotency_key, :message_type, :body, :request)
+
+    GREETING_BODY = "Welcome to The Local Table! 🍽️ Tap below to browse our menu and " \
+                    "add items to your cart — send it over whenever you're ready to order.".freeze
+    FALLBACK_BODY = "Thanks for your message! Say \"menu\" any time to browse The Local Table's " \
+                    "catalog and place an order right here in WhatsApp.".freeze
+
+    # `inbound_message_id` is OUR messages.id, never Meta's id (those embed phone numbers).
+    def reply_to_text(inbound_message_id:, body:)
+      words = body.to_s.downcase.scan(/[[:alnum:]]+/)
+
+      if (words & GREETING_KEYWORDS).any?
+        catalog_greeting(inbound_message_id)
+      else
+        text_reply("reply", "reply:#{inbound_message_id}", FALLBACK_BODY)
+      end
     end
 
-    def respond_to(customer:, body:)
-      text = body.to_s.strip.downcase
+    # The automatic receipt is neutral on purpose: the order may still need
+    # review, so it states no total. Acceptance (a later phase) states the total.
+    def order_received(order:)
+      count = order.order_items.sum(:quantity)
+      body = "Thanks! We've received your order ##{order.id} (#{count} #{'item'.pluralize(count)}). " \
+             "We'll confirm it shortly. 🎉"
 
-      if GREETING_KEYWORDS.any? { |kw| text.include?(kw) }
-        send_catalog_greeting(customer)
-      else
-        send_fallback(customer)
-      end
+      text_reply("order_received", "order:#{order.id}:received", body)
     end
 
     private
 
-    def send_catalog_greeting(customer)
-      @client.send_catalog_message(
-        to: customer.whatsapp_number,
-        body: "Welcome to The Local Table! 🍽️ Tap below to browse our menu and " \
-              "add items to your cart — send it over whenever you're ready to order.",
-        thumbnail_product_retailer_id: featured_product_sku
+    def catalog_greeting(inbound_message_id)
+      sku = featured_product_sku
+      # A catalog card without a thumbnail is rejected by Graph (#131009), so with
+      # an empty menu the greeting degrades to plain text.
+      return text_reply("greeting", "greeting:#{inbound_message_id}", GREETING_BODY) unless sku
+
+      Reply.new(
+        purpose: "greeting",
+        idempotency_key: "greeting:#{inbound_message_id}",
+        message_type: "interactive",
+        body: GREETING_BODY,
+        request: { "type" => "catalog_message", "body" => GREETING_BODY, "thumbnail_product_retailer_id" => sku }
       )
     end
 
-    # A signature dish to feature on the catalog card. Falls back to
-    # whatever's cheapest to fetch if the menu changes.
+    def text_reply(purpose, key, body)
+      Reply.new(purpose: purpose, idempotency_key: key, message_type: "text", body: body,
+                request: { "type" => "text", "body" => body })
+    end
+
+    # A signature dish to feature on the catalog card; any in-stock product otherwise.
     def featured_product_sku
-      Product.in_stock.find_by(sku: "MAI-006")&.sku || Product.in_stock.first&.sku
-    end
-
-    def send_fallback(customer)
-      @client.send_text(
-        to: customer.whatsapp_number,
-        body: "Thanks for your message! Say \"menu\" any time to browse The Local Table's " \
-              "catalog and place an order right here in WhatsApp."
-      )
+      Product.in_stock.find_by(sku: "MAI-006")&.sku || Product.in_stock.order(:id).first&.sku
     end
   end
 end

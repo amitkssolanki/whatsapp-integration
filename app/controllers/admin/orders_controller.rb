@@ -1,7 +1,7 @@
 module Admin
   class OrdersController < ApplicationController
     def index
-      @orders = Order.includes(:customer, order_items: :product)
+      @orders = Order.includes(:customer, order_items: :product).order(created_at: :desc, id: :desc)
     end
 
     def show

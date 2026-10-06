@@ -4,5 +4,11 @@ production: &recurring
     command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
     schedule: every hour at minute 12
 
+  # Moves deliveries stuck in `processing` to failed and sends stuck in
+  # `sending` to unknown (see StallSweeperJob).
+  stall_sweeper:
+    class: StallSweeperJob
+    schedule: every 5 minutes
+
 development:
   <<: *recurring

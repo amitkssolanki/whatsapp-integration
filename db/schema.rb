@@ -10,9 +10,23 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_06_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "catalog_sync_runs", force: :cascade do |t|
+    t.string "kind", null: false
+    t.string "status", default: "pending", null: false
+    t.string "batch_handle"
+    t.jsonb "requested_items", default: [], null: false
+    t.jsonb "result", default: {}, null: false
+    t.string "triggered_by"
+    t.datetime "started_at"
+    t.datetime "finished_at"
+    t.text "error_message"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
 
   create_table "categories", force: :cascade do |t|
     t.datetime "created_at", null: false
@@ -29,6 +43,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_000001) do
     t.bigint "customer_id", null: false
     t.datetime "last_message_at"
     t.datetime "updated_at", null: false
+    t.datetime "last_inbound_at"
     t.index ["customer_id"], name: "index_conversations_on_customer_id", unique: true
   end
 
@@ -38,6 +53,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_000001) do
     t.boolean "opted_in", default: true, null: false
     t.datetime "updated_at", null: false
     t.string "whatsapp_number", null: false
+    t.string "wa_user_id"
     t.index ["whatsapp_number"], name: "index_customers_on_whatsapp_number", unique: true
   end
 
@@ -50,7 +66,31 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_000001) do
     t.jsonb "raw_payload", default: {}, null: false
     t.datetime "updated_at", null: false
     t.string "wa_message_id"
+    t.integer "status", default: 0, null: false
+    t.string "purpose"
+    t.string "idempotency_key"
+    t.bigint "order_id"
+    t.bigint "webhook_delivery_id"
+    t.datetime "wa_timestamp"
+    t.integer "attempts", default: 0, null: false
+    t.datetime "next_attempt_at"
+    t.datetime "accepted_at"
+    t.datetime "sent_at"
+    t.datetime "delivered_at"
+    t.datetime "read_at"
+    t.datetime "failed_at"
+    t.datetime "blocked_at"
+    t.integer "error_code"
+    t.string "error_category"
+    t.string "error_title"
+    t.text "error_details"
+    t.string "guard_override_by"
     t.index ["conversation_id"], name: "index_messages_on_conversation_id"
+    t.index ["direction", "status", "accepted_at"], name: "index_messages_on_direction_and_status_and_accepted_at"
+    t.index ["idempotency_key"], name: "index_messages_on_idempotency_key", unique: true, where: "(idempotency_key IS NOT NULL)"
+    t.index ["order_id"], name: "index_messages_on_order_id"
+    t.index ["wa_message_id"], name: "index_messages_on_wa_message_id", unique: true, where: "(wa_message_id IS NOT NULL)"
+    t.index ["webhook_delivery_id"], name: "index_messages_on_webhook_delivery_id"
   end
 
   create_table "order_items", force: :cascade do |t|
@@ -62,6 +102,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_000001) do
     t.string "product_retailer_id", null: false
     t.integer "quantity", default: 1, null: false
     t.datetime "updated_at", null: false
+    t.integer "catalog_price_cents"
     t.index ["order_id"], name: "index_order_items_on_order_id"
     t.index ["product_id"], name: "index_order_items_on_product_id"
   end
@@ -75,7 +116,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_000001) do
     t.integer "total_cents", default: 0, null: false
     t.datetime "updated_at", null: false
     t.text "wa_order_note"
+    t.bigint "source_message_id"
+    t.integer "review_status", default: 0, null: false
+    t.jsonb "validation_issues", default: [], null: false
+    t.datetime "decided_at"
+    t.string "decided_by"
+    t.text "rejection_reason"
     t.index ["customer_id"], name: "index_orders_on_customer_id"
+    t.index ["source_message_id"], name: "index_orders_on_source_message_id", unique: true
   end
 
   create_table "products", force: :cascade do |t|
@@ -90,6 +138,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_000001) do
     t.integer "price_cents", null: false
     t.string "sku", null: false
     t.datetime "updated_at", null: false
+    t.string "catalog_synced_digest"
+    t.datetime "catalog_synced_at"
+    t.text "catalog_sync_error"
     t.index ["category_id"], name: "index_products_on_category_id"
     t.index ["sku"], name: "index_products_on_sku", unique: true
   end
@@ -244,11 +295,40 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_000001) do
     t.index ["key"], name: "index_solid_queue_semaphores_on_key", unique: true
   end
 
+  create_table "webhook_deliveries", force: :cascade do |t|
+    t.text "raw_body", null: false
+    t.string "body_sha256", limit: 64, null: false
+    t.string "signature_header"
+    t.string "request_id"
+    t.string "object_type"
+    t.string "phone_number_id"
+    t.jsonb "item_counts", default: {}, null: false
+    t.integer "status", default: 0, null: false
+    t.integer "attempts", default: 0, null: false
+    t.jsonb "outcome", default: {}, null: false
+    t.string "last_error_class"
+    t.text "last_error_message"
+    t.datetime "received_at", null: false
+    t.datetime "last_attempted_at"
+    t.datetime "processed_at"
+    t.integer "replay_count", default: 0, null: false
+    t.datetime "last_replayed_at"
+    t.string "last_replayed_by"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["body_sha256"], name: "index_webhook_deliveries_on_body_sha256"
+    t.index ["received_at"], name: "index_webhook_deliveries_on_received_at"
+    t.index ["status", "received_at"], name: "index_webhook_deliveries_on_status_and_received_at"
+  end
+
   add_foreign_key "conversations", "customers"
   add_foreign_key "messages", "conversations"
+  add_foreign_key "messages", "orders"
+  add_foreign_key "messages", "webhook_deliveries", on_delete: :nullify
   add_foreign_key "order_items", "orders"
   add_foreign_key "order_items", "products"
   add_foreign_key "orders", "customers"
+  add_foreign_key "orders", "messages", column: "source_message_id"
   add_foreign_key "products", "categories"
   add_foreign_key "solid_queue_batch_executions", "solid_queue_batches", column: "batch_id", on_delete: :cascade
   add_foreign_key "solid_queue_batch_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
