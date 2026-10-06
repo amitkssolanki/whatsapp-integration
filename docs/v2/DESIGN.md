@@ -291,3 +291,18 @@ Structured key=value/JSON logs with request_id, delivery_id, message_id (ours),
 order_id, job_id, error_category. Never log Meta message ids (they embed phone
 numbers), phone numbers (mask to last 4), names, or payload bodies.
 `DEMO_MASK_PII=1` masks phone numbers and names in every admin view.
+
+## 12. Fault injection (operating-period scenarios 4, 6, 7)
+
+`FaultInjection` reads `FAULT_INJECT` (comma-separated) on every check:
+
+| toggle | effect |
+|---|---|
+| `processing:order` | `MessageHandler` raises `FaultInjection::Injected` for order items: the item rolls back, the delivery becomes failed/partially_failed and is replayable once the toggle is removed. The item detail reads `FaultInjection::Injected: injected:processing:order`. |
+| `send:5xx` | `WhatsappClient` returns a synthetic 503 (`transient_platform`, retryable) without calling Meta. The message's `error_details` starts with `[injected]`. |
+| `send:read_timeout_after_send` | the real request is made, the response is discarded and the ambiguous result returned, so the message becomes `unknown`. `error_details` starts with `[injected]`. |
+
+Only honoured when `Rails.env.local?`, or in production with `FAULT_INJECTION_ALLOWED=1`;
+production refuses to boot with `FAULT_INJECT` set but not allowed. A toggle fires for
+every matching event while set; every firing logs `fault.injected` (warn) with the kind.
+The Health page shows a red banner listing the active toggles.

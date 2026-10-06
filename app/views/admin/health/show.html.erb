@@ -8,6 +8,17 @@
 <h1>Health</h1>
 <p class="muted">As of <%= admin_time(@snapshot[:generated_at], seconds: true) %>. Read-only counts; the buttons queue work and never call Meta from this page.</p>
 
+<% fault = @snapshot[:fault_injection] %>
+<% if fault[:active].any? %>
+  <div class="banner banner-bad" role="alert" id="fault-injection">
+    <strong>Fault injection is ACTIVE:</strong> <%= fault[:active].map { |kind| tag.code(kind) }.then { |codes| safe_join(codes, ", ") } %>.
+    Failures it causes are deliberate and labeled “injected”; they are not real platform behavior. Remove FAULT_INJECT when the scenario is done.
+  </div>
+<% end %>
+<% if fault[:ignored].any? %>
+  <p class="muted" id="fault-injection-ignored">FAULT_INJECT lists toggles that are ignored here: <%= fault[:ignored].join(", ") %>.</p>
+<% end %>
+
 <% if banner[:active] %>
   <div class="banner banner-bad" role="alert">
     Sending is failing because of configuration (<%= banner[:categories].join(", ") %>):

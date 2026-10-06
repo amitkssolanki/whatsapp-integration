@@ -46,6 +46,21 @@ RSpec.describe ProductionConfigCheck do
     }
   end
 
+  describe "fault injection" do
+    it "refuses FAULT_INJECT without FAULT_INJECTION_ALLOWED=1" do
+      expect { described_class.call(valid_env.merge("FAULT_INJECT" => "send:5xx")) }
+        .to raise_error(ProductionConfigCheck::Error, /FAULT_INJECT is set without FAULT_INJECTION_ALLOWED=1/)
+      expect { described_class.call(valid_env.merge("FAULT_INJECT" => "send:5xx", "FAULT_INJECTION_ALLOWED" => "yes")) }
+        .to raise_error(ProductionConfigCheck::Error, /FAULT_INJECT/)
+    end
+
+    it "boots with the explicit allowance, or with FAULT_INJECT unset or blank" do
+      expect { described_class.call(valid_env.merge("FAULT_INJECT" => "send:5xx", "FAULT_INJECTION_ALLOWED" => "1")) }.not_to raise_error
+      expect { described_class.call(valid_env.merge("FAULT_INJECT" => "  ")) }.not_to raise_error
+      expect { described_class.call(valid_env) }.not_to raise_error
+    end
+  end
+
   describe ".skip?" do
     it "skips during asset precompilation" do
       expect(described_class.skip?("SECRET_KEY_BASE_DUMMY" => "1")).to be(true)
