@@ -116,11 +116,7 @@ end
 
 puts "Seeded #{Category.count} categories and #{Product.count} menu items for The Local Table."
 
-# A couple of demo customers/conversations so the admin views aren't empty
-# before the first real WhatsApp message arrives.
-demo_customer = Customer.find_or_create_by!(whatsapp_number: "+15551234567") do |c|
-  c.display_name = "Jordan (demo)"
-end
-demo_customer.create_conversation! unless demo_customer.conversation
-
-puts "Seeded #{Customer.count} demo customer(s)."
+# No demo customers or conversations are seeded here any more. The old
+# "Jordan (demo)" customer was flagged `synthetic` by the migration that added
+# the flag. To fill the operator UI with clearly synthetic traffic, run
+# `bin/rails demo:seed_integration CONFIRM=yes` (docs/operating/PROTOCOL.md).

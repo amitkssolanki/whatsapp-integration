@@ -1,4 +1,6 @@
 class Product < ApplicationRecord
+  include Synthetic
+
   belongs_to :category
   has_many :order_items, dependent: :nullify
 

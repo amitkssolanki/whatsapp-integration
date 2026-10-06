@@ -2,6 +2,7 @@
 # interpreted. See docs/v2/DESIGN.md §2 and §3.
 class WebhookDelivery < ApplicationRecord
   include StatusTransitions
+  include Synthetic
 
   class ReplayError < StandardError; end
   class NotReplayable < ReplayError; end

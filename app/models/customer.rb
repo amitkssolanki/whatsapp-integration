@@ -1,4 +1,6 @@
 class Customer < ApplicationRecord
+  include Synthetic
+
   has_one :conversation, dependent: :destroy
   has_many :orders, dependent: :nullify
 
