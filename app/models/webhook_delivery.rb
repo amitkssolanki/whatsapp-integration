@@ -59,7 +59,7 @@ class WebhookDelivery < ApplicationRecord
       )
       raise NotReplayable, "the delivery is no longer replayable (another worker moved it)" unless claimed
 
-      ProcessWebhookDeliveryJob.perform_later(id, replay: true)
+      ProcessWebhookDeliveryJob.perform_later(id, replay: true) || raise(ApplicationJob::EnqueueFailed, "ProcessWebhookDeliveryJob")
     end
 
     AppLog.event("webhook.replayed", delivery_id: id, by: by, replay_count: replay_count)

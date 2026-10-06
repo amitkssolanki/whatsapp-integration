@@ -63,7 +63,7 @@ RSpec.describe Message, "operator actions", type: :model do
       message = failed("auth_config")
       allow(SendMessageJob).to receive(:perform_later).and_return(false)
 
-      expect { message.resend!(by: "a") }.to raise_error(/could not enqueue/)
+      expect { message.resend!(by: "a") }.to raise_error(ApplicationJob::EnqueueFailed)
       expect(message.reload).to be_failed
     end
   end

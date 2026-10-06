@@ -225,6 +225,15 @@ RSpec.describe "WhatsApp webhook", type: :request do
         expect(response).to have_http_status(:internal_server_error)
         expect(WebhookDelivery.count).to eq(0)
       end
+
+      it "treats a refused enqueue (perform_later returning false) as a failure: 500 and nothing stored" do
+        allow(ProcessWebhookDeliveryJob).to receive(:perform_later).and_return(false)
+
+        post_webhook(body)
+
+        expect(response).to have_http_status(:internal_server_error)
+        expect(WebhookDelivery.count).to eq(0)
+      end
     end
 
     context "as an endpoint for a non-browser client" do

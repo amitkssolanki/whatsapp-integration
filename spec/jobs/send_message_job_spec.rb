@@ -179,6 +179,16 @@ RSpec.describe SendMessageJob, type: :job do
       expect(retry_jobs.sole[:at]).to eq((now + 30.seconds).to_f)
     end
 
+    it "rolls the retry back (and the send is not lost silently) when the delayed job cannot be enqueued" do
+      message = outbound
+      graph.fail_with(Faraday::ConnectionFailed.new(Errno::ECONNREFUSED.new))
+      allow(described_class).to receive(:set).and_return(double(perform_later: false))
+
+      expect { perform(message) }.to raise_error(ApplicationJob::EnqueueFailed)
+
+      expect(message.reload).to be_sending # rolled back to the claim; the sweeper will surface it
+    end
+
     it "walks the whole schedule 30 s, 2 min, 10 min, 30 min and then fails with transient_exhausted" do
       message = outbound
       5.times { graph.reply(503, { "error" => { "message" => "down" } }) } # no code: HTTP 5xx fallback

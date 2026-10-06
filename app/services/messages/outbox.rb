@@ -27,7 +27,7 @@ module Messages
       outbound_id = inserted.rows.dig(0, 0)
       # A failed enqueue returns false; raise so the caller's transaction rolls back
       # instead of leaving a pending row that nothing will ever send.
-      (SendMessageJob.perform_later(outbound_id) || raise("could not enqueue SendMessageJob")) if outbound_id
+      (SendMessageJob.perform_later(outbound_id) || raise(ApplicationJob::EnqueueFailed, "SendMessageJob")) if outbound_id
       outbound_id
     end
   end

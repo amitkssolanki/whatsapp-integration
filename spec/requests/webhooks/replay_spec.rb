@@ -45,6 +45,18 @@ RSpec.describe "Replaying a webhook delivery", type: :request do
     end
   end
 
+  describe "when the replay job cannot be enqueued" do
+    it "raises and leaves the delivery as it was, instead of stranding it in processing" do
+      delivery = deliver_and_process(order_body)
+      allow(ProcessWebhookDeliveryJob).to receive(:perform_later).and_return(false)
+
+      expect { delivery.replay!(by: "operator") }.to raise_error(ApplicationJob::EnqueueFailed)
+
+      expect(delivery.reload).to be_processed
+      expect(delivery.replay_count).to eq(0)
+    end
+  end
+
   describe "of a failed or partially failed delivery" do
     it "applies the items that failed once the cause is fixed, leaving applied ones alone" do
       json = fixture_json("text_greeting")

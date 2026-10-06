@@ -20,7 +20,7 @@ module Webhooks
 
       WebhookDelivery.transaction do
         delivery = WebhookDelivery.create!(attributes_for(payload))
-        ProcessWebhookDeliveryJob.perform_later(delivery.id) if delivery.received?
+        (ProcessWebhookDeliveryJob.perform_later(delivery.id) || raise(ApplicationJob::EnqueueFailed, "ProcessWebhookDeliveryJob")) if delivery.received?
         delivery
       end
     end

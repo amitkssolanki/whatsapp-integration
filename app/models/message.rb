@@ -179,7 +179,7 @@ class Message < ApplicationRecord
   def start_over!(to, event, by:, previous_category: nil, **extra)
     moved = self.class.transaction do
       transition!(to, **FRESH_START, **extra).tap do |ok|
-        (SendMessageJob.perform_later(id) || raise("could not enqueue SendMessageJob")) if ok
+        (SendMessageJob.perform_later(id) || raise(ApplicationJob::EnqueueFailed, "SendMessageJob")) if ok
       end
     end
     return ActionResult.refused("the message changed state before the action could apply; reload and try again") unless moved

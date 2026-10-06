@@ -118,7 +118,7 @@ class SendMessageJob < ApplicationJob
 
     scheduled = Message.transaction do
       moved = message.transition!(:retry_scheduled, **error_attrs(result), next_attempt_at: Time.current + delay)
-      self.class.set(wait: delay).perform_later(message.id) if moved
+      (self.class.set(wait: delay).perform_later(message.id) || raise(ApplicationJob::EnqueueFailed, "SendMessageJob")) if moved
       moved
     end
     AppLog.event("send.retry_scheduled", job_id: job_id, message_id: message.id, attempts: message.attempts,
