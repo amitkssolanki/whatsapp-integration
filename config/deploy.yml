@@ -14,8 +14,9 @@ servers:
     hosts:
       - <%= server_ip %>
     options:
-      # Puma plus the in-process Solid Queue supervisor. Bounded because the VPS is
-      # shared with other applications: a fault here must not starve them.
+      # Puma plus the Solid Queue supervisor, which the Puma plugin forks into its own
+      # worker/dispatcher/scheduler processes. Bounded because the VPS is shared with
+      # other applications: a fault here must not starve them. Check `docker stats`.
       memory: 768m
 
 proxy:
@@ -83,6 +84,9 @@ logging:
 # Keep the previous release's assets so in-flight pages do not 404 during a deploy.
 asset_path: /rails/public/assets
 
+# Shared host with a 12 GB-free disk: keep only the last few stopped containers/images.
+retain_containers: 3
+
 deploy_timeout: 60
 drain_timeout: 30
 
@@ -92,6 +96,9 @@ accessories:
     host: <%= server_ip %>
     # No `port:` on purpose: PostgreSQL is reachable only on the Docker network, as
     # whatsapp-integration-db:5432, never from the internet. Backups use `docker exec`.
+    # Sized for the 256 MB cap below (Postgres defaults assume more memory). The app's
+    # pool is RAILS_MAX_THREADS (10) per process across Puma and the Solid Queue processes.
+    cmd: postgres -c shared_buffers=64MB -c max_connections=40 -c work_mem=2MB
     env:
       clear:
         POSTGRES_USER: whatsapp_integration

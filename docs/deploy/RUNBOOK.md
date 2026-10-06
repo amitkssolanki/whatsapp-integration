@@ -22,7 +22,7 @@ binstub), with the secrets exported (below).
 
 | Item | Detail |
 |---|---|
-| VPS | Ubuntu 24.04 LTS, amd64, 2 GB RAM, public IPv4, ports 22/80/443 open. Your SSH public key on `root` (`ssh root@IP` works without a password). Docker is installed by `kamal setup`. |
+| VPS | 203.0.113.10: Ubuntu 26.04, amd64, 4 vCPU / 7.6 GB shared with other apps, Docker already installed (`kamal setup` skips installing it), kamal-proxy already running. Your SSH key on `root`. |
 | DNS | A record `HOST -> IP`, **DNS-only (grey cloud) on Cloudflare**. Proxied (orange) breaks the Let's Encrypt challenge that kamal-proxy performs. Check: `dig +short HOST` returns the VPS IP. |
 | GHCR token | Taken from the `gh` CLI login at source time (`gh auth token`, needs `write:packages`), as for the other apps on this host. Kamal also logs the VPS into ghcr.io with it. |
 | Config edit | Set the real `app_host` and `server_ip` in `config/deploy.yml`, commit. Kamal builds from the committed HEAD and refuses a dirty tree. |
@@ -67,8 +67,10 @@ ADMIN_USER, ADMIN_PASSWORD, APP_HOST` is missing, or if `WHATSAPP_ALLOW_UNSIGNED
 
 ```sh
 source ~/.config/whatsapp-demo/secrets.env
-kamal config | head -20          # sanity check (prints secrets: do not paste it anywhere)
-kamal setup                      # installs Docker, boots proxy + Postgres, builds, pushes, deploys
+kamal config | head -20          # sanity check (secret values are redacted)
+kamal accessory boot db          # Postgres first; wait for "ready to accept connections":
+kamal accessory logs db --lines 20
+kamal setup                      # reuses the running proxy and Postgres, builds, pushes, deploys
 curl -i https://HOST/up              # 200
 curl -s -o /dev/null -w '%{http_code}\n' "https://HOST/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=ping"   # 403: route is live, bad token refused
 ```
@@ -91,11 +93,19 @@ scp script/backup/pg_backup.sh script/backup/pg_restore.sh root@IP:/opt/whatsapp
 ssh root@IP 'chmod 700 /opt/whatsapp-integration/backup/*.sh'
 ```
 
-Add to root's crontab (`ssh root@IP`, `crontab -e`). Nightly 02:17 UTC, 7 days kept locally; set
-`HEARTBEAT_URL` (Healthchecks.io / Better Stack heartbeat) so a silent failure alerts you:
+Install the nightly job as its own file in `/etc/cron.d/` (the host is shared, so it stays out of
+root's personal crontab and is easy to find and remove). Nightly 02:17 UTC, 7 days kept locally.
+Optionally add `HEARTBEAT_URL=<your heartbeat URL>` (Healthchecks.io / Better Stack) in front of
+the command so a silent failure alerts you:
 
-```cron
-17 2 * * * HEARTBEAT_URL=https://hc-ping.com/YOUR-UUID /opt/whatsapp-integration/backup/pg_backup.sh >> /var/log/whatsapp-integration-backup.log 2>&1
+```sh
+ssh root@IP 'cat > /etc/cron.d/whatsapp-integration-backup <<CRON
+17 2 * * * root /opt/whatsapp-integration/backup/pg_backup.sh >> /var/log/whatsapp-integration-backup.log 2>&1
+CRON
+chmod 644 /etc/cron.d/whatsapp-integration-backup
+cat > /etc/logrotate.d/whatsapp-integration-backup <<ROT
+/var/log/whatsapp-integration-backup.log { weekly rotate 8 compress missingok notifempty }
+ROT'
 ```
 
 **Weekly off-host copy** (the VPS disk is not a backup of the VPS). From your laptop, every week
