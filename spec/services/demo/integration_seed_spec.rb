@@ -45,7 +45,9 @@ RSpec.describe Demo::IntegrationSeed do
       expect(Customer.pluck(:synthetic)).to all(be(true))
       expect(Customer.order(:id).map(&:display_name)).to eq((1..11).map { |n| "Demo Customer #{n}" })
       expect(Customer.pluck(:whatsapp_number)).to all(match(/\A1555010\d{4}\z/))
-      expect(Customer.pluck(:whatsapp_number).join).not_to include("0000000000")
+      # Never a real number: in particular never an Indian (+91) number such as the
+      # project's real business number, which stays out of tracked files.
+      expect(Customer.pluck(:whatsapp_number).grep(/\A91/)).to be_empty
       expect(WebhookDelivery.pluck(:synthetic)).to all(be(true))
       expect(WebhookDelivery.pluck(:raw_body)).to all(include('"simulated":true'))
       expect(Product.pluck(:synthetic)).to all(be(true))
@@ -213,12 +215,16 @@ RSpec.describe Demo::IntegrationSeed do
       seeded = seed
       expect(seeded).to be_passed
       state = table_counts
+      synthetic_ids = Customer.synthetic.order(:id).pluck(:id)
       allow_any_instance_of(Demo::FakeMeta).to receive(:catalog_requests).and_return([ { path: "/x" } ])
 
       expect { seed }.to raise_error(Demo::IntegrationSeed::Violation, /rolled everything back.*Catalog::Client was called/m)
 
       expect(table_counts).to eq(state) # the previous synthetic data is still there, nothing half-created
-      expect(Customer.synthetic.pluck(:id)).to eq(Customer.synthetic.order(:id).pluck(:id))
+      # The same rows, not deleted and re-created. (This line used to compare an
+      # unordered query with an ordered one, which tested nothing and failed
+      # intermittently on Postgres row order.)
+      expect(Customer.synthetic.order(:id).pluck(:id)).to eq(synthetic_ids)
       expect(Demo::Sandbox).not_to be_entered
       expect(WhatsappClient.adapter).to eq(graph.adapter)
       expect(@real_message.reload).to be_pending

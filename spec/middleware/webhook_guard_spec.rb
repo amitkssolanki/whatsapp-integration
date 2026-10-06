@@ -161,7 +161,12 @@ RSpec.describe "WebhookGuard through the app", type: :request do
   end
 
   it "is mirrored by the kamal-proxy request body limit in config/deploy.yml" do
+    # deploy.yml reads the server address from the private secrets file; any
+    # documentation-range address will do for rendering it here.
+    saved = ENV["DEPLOY_SERVER_IP"]
+    ENV["DEPLOY_SERVER_IP"] = "203.0.113.10"
     deploy = YAML.safe_load(ERB.new(Rails.root.join("config/deploy.yml").read).result, aliases: true)
+    saved.nil? ? ENV.delete("DEPLOY_SERVER_IP") : ENV["DEPLOY_SERVER_IP"] = saved
 
     expect(deploy.dig("proxy", "buffering")).to eq("requests" => true, "max_request_body" => WebhookGuard::MAX_BODY_BYTES)
   end

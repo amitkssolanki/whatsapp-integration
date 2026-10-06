@@ -2,9 +2,10 @@
 # accessory on the same host. Nothing here is a secret; see .kamal/secrets and
 # docs/deploy/RUNBOOK.md. Do not run `kamal setup` until the RUNBOOK prerequisites are met.
 <%
-  # The canonical V2 integration environment (the Meta webhook target).
-  app_host  = "whatsapp.railsfanatics.com" # DNS A record -> server_ip, DNS-only
-  server_ip = "203.0.113.10"               # shared VPS: one kamal-proxy fronts several apps
+  # The canonical V2 integration environment (the Meta webhook target). The server address
+  # is kept out of the public repo: export DEPLOY_SERVER_IP from the private secrets file.
+  app_host  = "whatsapp.railsfanatics.com" # DNS A record -> the server, DNS-only
+  server_ip = ENV.fetch("DEPLOY_SERVER_IP") { raise "DEPLOY_SERVER_IP is not set: source the secrets file (docs/deploy/RUNBOOK.md)" }
 %>
 service: whatsapp-integration
 image: amitkssolanki/whatsapp-integration

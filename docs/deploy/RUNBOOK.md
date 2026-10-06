@@ -1,8 +1,8 @@
 # Production runbook
 
-Canonical V2 integration environment: **https://whatsapp.railsfanatics.com** on the VPS
-**203.0.113.10** (`app_host` / `server_ip` in `config/deploy.yml`). It is the Meta webhook
-target; there is no ngrok in the normal flow.
+Canonical V2 integration environment: **https://whatsapp.railsfanatics.com** (`app_host` in
+`config/deploy.yml`; the server address comes from `DEPLOY_SERVER_IP` in the private secrets
+file and is not published). It is the Meta webhook target; there is no ngrok in the normal flow.
 
 Kamal 2 deploys the image `ghcr.io/amitkssolanki/whatsapp-integration` behind kamal-proxy
 (automatic Let's Encrypt). PostgreSQL 17 runs as a Kamal accessory on the same host (named
@@ -22,7 +22,7 @@ binstub), with the secrets exported (below).
 
 | Item | Detail |
 |---|---|
-| VPS | 203.0.113.10: Ubuntu 26.04, amd64, 4 vCPU / 7.6 GB shared with other apps, Docker already installed (`kamal setup` skips installing it), kamal-proxy already running. Your SSH key on `root`. |
+| VPS | A shared Linux VPS (amd64) already running Docker and kamal-proxy for other apps (`kamal setup` skips installing Docker). Your SSH key on `root`. Its address is `DEPLOY_SERVER_IP` in the secrets file. |
 | DNS | A record `HOST -> IP`, **DNS-only (grey cloud) on Cloudflare**. Proxied (orange) breaks the Let's Encrypt challenge that kamal-proxy performs. Check: `dig +short HOST` returns the VPS IP. |
 | GHCR token | Taken from the `gh` CLI login at source time (`gh auth token`, needs `write:packages`), as for the other apps on this host. Kamal also logs the VPS into ghcr.io with it. |
 | Config edit | Set the real `app_host` and `server_ip` in `config/deploy.yml`, commit. Kamal builds from the committed HEAD and refuses a dirty tree. |
@@ -35,6 +35,7 @@ command. `.kamal/secrets` only references these names (no values).
 
 ```sh
 # ~/.config/whatsapp-demo/secrets.env
+export DEPLOY_SERVER_IP=...           # the VPS address (kept out of the public repo)
 export KAMAL_REGISTRY_PASSWORD="$(gh auth token)"   # evaluated when sourced, not stored
 export SECRET_KEY_BASE=...           # bin/rails secret
 export POSTGRES_PASSWORD=...         # openssl rand -hex 24 (used by the app AND the accessory)
