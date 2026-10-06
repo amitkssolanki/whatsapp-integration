@@ -20,7 +20,7 @@ RSpec.describe Ops::Report, "outbound metrics" do
       failed_by_error_category: {}, error_codes: {}, attempts: { total: 0, messages_retried: 0 },
       unknown: { count: 0, with_sent_at: 0, with_delivered_at: 0, with_read_at: 0 },
       unknown_resolved: 0, unknown_unresolved: 0,
-      blocked: 0, guard_overrides: 0, undelivered: 0
+      blocked: 0, guard_overrides: 0, injected_faults: 0, undelivered: 0
     )
     expect(report[:latency]).to eq(accepted_to_sent: no_stats, sent_to_delivered: no_stats, delivered_to_read: no_stats, accepted_to_delivered: no_stats)
     expect(report[:status_anomalies]).to eq(read_before_delivered: 0, delivered_without_sent: 0)

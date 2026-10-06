@@ -41,9 +41,16 @@ module FaultInjection
     active(env).include?(kind)
   end
 
-  # Logs one firing. Returns the label to store on the affected row.
-  def self.fire(kind, **fields)
-    AppLog.warn("fault.injected", kind: kind, **fields)
-    "injected:#{kind}"
+  # Logs one firing and appends it to the affected row's injected_faults, a
+  # column nothing ever clears (a successful retry wipes error details and a
+  # replay replaces the outcome, but the evidence that a fault was injected must
+  # survive both). Returns the label to store on the affected row.
+  def self.fire(kind, message_id: nil, delivery_id: nil, **fields)
+    AppLog.warn("fault.injected", kind: kind, message_id: message_id, delivery_id: delivery_id, **fields.compact)
+    label = "injected:#{kind}"
+    append = [ "injected_faults = array_append(injected_faults, ?)", label ]
+    Message.where(id: message_id).update_all(append) if message_id
+    WebhookDelivery.where(id: delivery_id).update_all(append) if delivery_id
+    label
   end
 end

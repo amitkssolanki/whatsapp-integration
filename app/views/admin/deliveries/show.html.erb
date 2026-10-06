@@ -22,6 +22,9 @@
         <strong><%= @delivery.last_error_class %></strong> <span class="pre"><%= scrub_ids(@delivery.last_error_message) %></span>
       <% else %>—<% end %>
     </dd>
+    <% if @delivery.injected_faults.any? %>
+      <dt>Injected faults</dt><dd><span class="badge badge-bad">simulated</span> <%= @delivery.injected_faults.uniq.join(", ") %></dd>
+    <% end %>
     <dt>Body fingerprint</dt><dd><code><%= @delivery.body_sha256.first(12) %></code></dd>
     <% if @delivery.purged? %>
       <dt>Raw body</dt><dd><%= badge("purged", "neutral") %> removed <%= admin_time(@delivery.purged_at) %>; cannot be replayed</dd>

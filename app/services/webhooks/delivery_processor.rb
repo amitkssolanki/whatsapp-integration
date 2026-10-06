@@ -55,11 +55,20 @@ module Webhooks
       raise
     rescue StandardError => e
       AppLog.event("webhook.item_failed", delivery_id: @delivery.id, kind: kind, error_class: e.class.name)
+      record_injected_fault(e)
       ItemResult.for(kind, item["id"].to_s, "error", Redact.exception(e))
     end
 
     def foreign_result(kind, item)
       ItemResult.for(kind, item["id"].to_s, "ignored", FOREIGN_NUMBER).tap { |result| log_item(result) }
+    end
+
+    # The item's transaction rolled back, taking any label written inside it.
+    # Write the injected-fault evidence again, outside it, so it survives.
+    def record_injected_fault(error)
+      return unless error.is_a?(FaultInjection::Injected)
+
+      WebhookDelivery.where(id: @delivery.id).update_all([ "injected_faults = array_append(injected_faults, ?)", error.message ])
     end
 
     def log_item(result)

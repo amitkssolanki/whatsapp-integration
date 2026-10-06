@@ -30,6 +30,7 @@
         <% if message.outbound? %>
           <div><%= message_state(message) %></div>
           <% if message.error_details.present? %><div class="muted pre"><%= scrub_ids(message.error_details) %></div><% end %>
+          <% if message.injected_faults.any? %><div><span class="badge badge-bad">simulated</span> <%= message.injected_faults.uniq.join(", ") %></div><% end %>
           <% if message.guard_override_by.present? %><div class="muted">Window override requested by <%= message.guard_override_by %></div><% end %>
           <div class="msg-actions"><%= render "admin/messages/actions", message: message %></div>
         <% end %>
