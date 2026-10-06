@@ -33,16 +33,15 @@ Evidence is labelled by kind. **Real** is traffic from V1's live run on
 | Operator UI, PII masking, fail-closed auth | Implemented | Simulated (request specs) |
 | Catalog push, batch polling, read-only reconcile | Implemented, off by default | Documentation and Faraday stubs only. **Not verified against Meta** |
 | Ops report (`ops:report`) | Implemented | Simulated (specs on seeded data) |
+| Fault injection, demo simulator, payload purge | Implemented | Simulated (specs). Injected faults are labeled permanently on the affected rows (`injected_faults`) |
 | Kamal deploy config, backup and restore scripts, runbook | Written | Specs cover only the boot-time config check, the proxy body limit and the runbook text; **never deployed**, restore drill never run on a real VPS |
 | Live Meta verification of V2 | **Not done** | |
 | Meta cutover, operating period | **Not done** | Protocol drafted in `docs/operating/PROTOCOL.md`; it records nothing yet |
 
-Observed on this branch: `bundle exec rspec` reports 874 examples, 0 failures
+Observed on `main` at the time of writing: `bundle exec rspec` reports 958 examples, 0 failures
 (local PostgreSQL, about 12 seconds). Specs verify the code against the
 fixtures and stubs described above; they say nothing about how Meta behaves.
 
-In progress on a separate branch and not covered here: fault injection, a demo
-simulator, and payload retention tooling.
 
 ## What V1 got wrong
 
@@ -299,6 +298,21 @@ bin/brakeman --no-pager && bin/bundler-audit
 (`rspec` against PostgreSQL 17). `bin/rails ops:report FROM=2026-10-20
 TO=2026-11-10 FORMAT=md` prints delivery, order, outbound, latency, status
 anomaly, window, catalog and inbound metrics computed only from the database.
+
+Operating tools (`docs/operating/PROTOCOL.md`):
+
+- `FAULT_INJECT=processing:order,send:5xx,send:read_timeout_after_send` makes
+  deliberate, labeled failures for the scenario runs. Honored only in
+  development/test, or in production with `FAULT_INJECTION_ALLOWED=1`
+  (production refuses to boot with the first and not the second). Health shows
+  a red banner while any toggle is set.
+- `bin/rails demo:simulate` builds a local, clearly simulated dataset for
+  screenshots: fake customers ("Demo Customer N", +1 555 010 numbers), signed
+  webhooks through the real controller, an in-process fake Graph API. It runs
+  only in development and only against a database whose name contains `_demo`:
+  `DATABASE_URL=postgres:///whatsapp_integration_demo bin/rails db:prepare db:seed demo:simulate`.
+- `bin/rails ops:purge_payloads BEFORE=YYYY-MM-DD CONFIRM=yes` removes raw
+  webhook bodies and message payloads older than the date; counts and statuses stay.
 
 Real Meta traffic needs a public HTTPS URL for `/webhooks/whatsapp`; that is
 not automated here.
