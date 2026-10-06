@@ -64,7 +64,7 @@ class ProcessWebhookDeliveryJob < ApplicationJob
   def record_failure(delivery, error)
     return unless delivery
 
-    delivery.transition!(:failed, last_error_class: error.class.name, last_error_message: error.message.truncate(500),
+    delivery.transition!(:failed, last_error_class: error.class.name, last_error_message: Redact.scrub(error.message, limit: 500),
                                   processed_at: Time.current)
     AppLog.event("webhook.job_failed", job_id: job_id, delivery_id: delivery.id, error_class: error.class.name)
   rescue StandardError
