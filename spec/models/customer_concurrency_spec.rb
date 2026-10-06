@@ -19,7 +19,7 @@ RSpec.describe Customer, "concurrent resolution" do
       Thread.new do
         ActiveRecord::Base.connection_pool.with_connection do
           barrier << true
-          Customer.transaction { Customer.resolve!(**identity) }
+          Customer.transaction { Customer.resolve!(**identity).tap { |customer| customer.fill_in!(**identity) } }
         end
       end
     end.map(&:value)

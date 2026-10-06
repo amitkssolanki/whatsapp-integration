@@ -26,6 +26,8 @@ module Webhooks
       inbound_id = insert_inbound(conversation, wa_message_id)
       return result(wa_message_id, "duplicate") unless inbound_id
 
+      # Only a message that is new may refresh what we know about the customer.
+      customer.fill_in!(**sender)
       touch_conversation(conversation)
       detail = react(customer, conversation, inbound_id)
       result(wa_message_id, "applied", detail)
@@ -113,11 +115,13 @@ module Webhooks
       sender if sender[:whatsapp_number] || sender[:wa_user_id]
     end
 
+    # The contact entry that describes the sender: the same wa_id as `from`, or the
+    # same user id as `from_user_id`. No exact match means no contact data at all;
+    # never borrow another person's name or user id.
     def contact_for(from, user_id)
-      contacts = Array(@value["contacts"]).select { |contact| contact.is_a?(Hash) }
-      contacts.find { |contact| from && contact["wa_id"] == from } ||
-        contacts.find { |contact| user_id && contact["user_id"] == user_id } ||
-        contacts.first
+      Array(@value["contacts"]).select { |contact| contact.is_a?(Hash) }.find do |contact|
+        (from && contact["wa_id"] == from) || (user_id && contact["user_id"] == user_id)
+      end
     end
 
     def result(ref, outcome, detail = nil)

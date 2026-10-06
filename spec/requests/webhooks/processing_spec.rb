@@ -100,6 +100,66 @@ RSpec.describe "Webhook processing", type: :request do
       end
     end
 
+    describe "customer data refresh" do
+      it "does not let a duplicate or replayed old message overwrite newer customer data" do
+        deliver_and_process(order_body)
+        Customer.sole.update_columns(display_name: "Newer Name", wa_user_id: "US.NEWER")
+
+        duplicate = deliver_and_process(order_body.sub("{", "{ "))
+
+        expect(outcome_results(duplicate)).to eq([ "duplicate" ])
+        expect(Customer.sole).to have_attributes(display_name: "Newer Name", wa_user_id: "US.NEWER")
+      end
+
+      it "refreshes the profile name from a genuinely new message" do
+        deliver_and_process(order_body)
+
+        deliver_and_process(greeting.sub("Test Customer 2", "Renamed Customer"))
+
+        expect(Customer.sole.display_name).to eq("Renamed Customer")
+      end
+
+      it "attaches no name or user id when the contacts block describes someone else" do
+        body = fixture_json("order").tap do |json|
+          contact = json.dig("entry", 0, "changes", 0, "value", "contacts", 0)
+          contact["wa_id"] = "15550100999"
+          contact["user_id"] = "US.SOMEONE-ELSE"
+          contact["profile"]["name"] = "Someone Else"
+        end.to_json
+
+        deliver_and_process(body)
+
+        # The message's own from/from_user_id still identify the sender; the stranger's contact is not used.
+        expect(Customer.sole).to have_attributes(whatsapp_number: "15550100004", wa_user_id: "US.1000000000000002", display_name: nil)
+      end
+
+      it "does not borrow the first contact's name or user id for a phone-less sender it cannot match" do
+        body = fixture_json("order").tap do |json|
+          value = json.dig("entry", 0, "changes", 0, "value")
+          value["messages"][0].delete("from_user_id")
+          value["contacts"][0]["wa_id"] = "15550100999"
+          value["contacts"][0]["user_id"] = "US.SOMEONE-ELSE"
+          value["contacts"][0]["profile"]["name"] = "Someone Else"
+        end.to_json
+
+        deliver_and_process(body)
+
+        expect(Customer.sole).to have_attributes(whatsapp_number: "15550100004", wa_user_id: nil, display_name: nil)
+      end
+
+      it "matches the contact by user id when the message has no phone number" do
+        body = fixture_json("order").tap do |json|
+          value = json.dig("entry", 0, "changes", 0, "value")
+          value["messages"][0].delete("from")
+          value["contacts"][0].delete("wa_id")
+        end.to_json
+
+        deliver_and_process(body)
+
+        expect(Customer.sole).to have_attributes(whatsapp_number: nil, wa_user_id: "US.1000000000000002", display_name: "Test Customer 2")
+      end
+    end
+
     it "keeps an order with unknown SKUs and flags it for review" do
       Product.where(sku: "BEV-001").destroy_all
 

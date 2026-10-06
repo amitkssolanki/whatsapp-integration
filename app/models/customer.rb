@@ -11,8 +11,12 @@ class Customer < ApplicationRecord
 
   # Finds or creates the customer (and its conversation) for an inbound
   # webhook. docs/v2/DESIGN.md §6: the business-scoped user id wins when
-  # present, the phone number is the fallback. A later message that brings the
-  # identifier we were missing fills it in.
+  # present, the phone number is the fallback.
+  #
+  # An existing customer is returned untouched. Refreshing it (the identifier a
+  # later message brings, a changed profile name) is #fill_in!, which callers
+  # run only once the message is known to be new: a replayed or duplicate old
+  # message must never overwrite newer customer data.
   #
   # Safe when two workers see the same new customer at once: the INSERT uses
   # ON CONFLICT DO NOTHING (on whichever unique index trips) instead of
@@ -31,7 +35,6 @@ class Customer < ApplicationRecord
       customer = lookup(number, user_id) or raise ActiveRecord::RecordNotFound, "customer vanished after insert"
     end
 
-    customer.fill_in!(whatsapp_number: number, wa_user_id: user_id, display_name: display_name)
     Conversation.insert({ customer_id: customer.id }, unique_by: :customer_id)
     customer
   end
