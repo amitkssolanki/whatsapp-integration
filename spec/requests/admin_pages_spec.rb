@@ -4,6 +4,8 @@ require "rails_helper"
 # public menu) rendering across schema changes, including the removal of the
 # Order and Message default scopes.
 RSpec.describe "Admin and public pages", type: :request do
+  include_context "admin operator"
+
   let(:category) { Category.create!(name: "Mains", slug: "mains", position: 0) }
   let!(:product) { Product.create!(name: "Lasagne", sku: "MAI-006", price_cents: 1550, category: category, image_url: "https://example.com/l.jpg") }
   let(:customer) { Customer.resolve!(whatsapp_number: "15550001234", display_name: "Jordan") }

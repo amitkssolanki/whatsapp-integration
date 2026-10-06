@@ -93,6 +93,123 @@ tr:last-child td { border-bottom: none; }
 .msg-row.outbound { background: rgba(31,138,76,0.05); }
 .msg-meta { font-size: 0.75rem; color: var(--muted); }
 
+/* ---- Operator UI ------------------------------------------------------ */
+
+:root {
+  --ok: #1f8a4c;
+  --ok-bg: rgba(31,138,76,0.12);
+  --warn: #9a6700;
+  --warn-bg: rgba(212,160,23,0.18);
+  --bad: #b43232;
+  --bad-bg: rgba(180,50,50,0.12);
+  --info: #1d6fb8;
+  --info-bg: rgba(29,111,184,0.12);
+  --neutral-bg: rgba(0,0,0,0.06);
+}
+
+body.admin { padding-top: 1rem; }
+body.admin .wrap { max-width: 1100px; }
+nav.admin-nav { max-width: 1100px; flex-wrap: wrap; align-items: baseline; }
+nav.admin-nav a.current { color: var(--accent); font-weight: 600; border-bottom: 2px solid var(--accent); }
+.admin h1 { margin-top: 0.25rem; }
+.admin h2 { margin-top: 1.5rem; margin-bottom: 0.5rem; }
+.admin h2 .count { font-weight: 400; color: var(--muted); font-size: 0.9rem; }
+.admin table { font-size: 0.9rem; }
+.admin td, .admin th { padding: 0.4rem 0.6rem; vertical-align: top; }
+.admin .num { text-align: right; font-variant-numeric: tabular-nums; }
+.admin .nowrap { white-space: nowrap; }
+.admin code { font-size: 0.85em; }
+.admin a { color: var(--accent); }
+
+.admin-footer {
+  max-width: 1100px;
+  margin: 2rem auto 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.pii-flag { margin-left: auto; color: var(--info); }
+
+.flash { padding: 0.6rem 0.9rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.92rem; }
+.flash-notice { background: var(--ok-bg); color: var(--ok); }
+.flash-alert { background: var(--bad-bg); color: var(--bad); }
+
+.banner { padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-weight: 500; }
+.banner-bad { background: var(--bad); color: #fff; }
+.banner-warn { background: var(--warn-bg); color: var(--warn); }
+
+.badge-ok { background: var(--ok-bg); color: var(--ok); }
+.badge-bad { background: var(--bad-bg); color: var(--bad); }
+.badge-warn { background: var(--warn-bg); color: var(--warn); }
+.badge-info { background: var(--info-bg); color: var(--info); }
+.badge-neutral { background: var(--neutral-bg); color: var(--muted); }
+
+.tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin: 0.75rem 0 1rem; }
+.tabs a { padding: 0.25rem 0.75rem; border-radius: 999px; border: 1px solid var(--border); text-decoration: none; font-size: 0.85rem; color: var(--muted); }
+.tabs a.current { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.state { white-space: nowrap; }
+.state .state-detail { white-space: normal; }
+.state-pending { color: var(--muted); }
+.state-accepted { color: #8a8a82; }
+.state-sent { color: var(--muted); }
+.state-read { color: var(--info); }
+.state-bad { color: var(--bad); }
+.state-warn { color: var(--warn); }
+.state-neutral { color: var(--muted); }
+.tick { font-weight: 700; letter-spacing: -0.15em; margin-right: 0.15em; }
+
+.btn, button.btn {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn-warn { border-color: var(--warn); color: var(--warn); }
+.admin form.inline { display: inline; margin: 0; }
+.admin form.stack { display: grid; gap: 0.5rem; max-width: 28rem; }
+.admin label { font-size: 0.85rem; color: var(--muted); }
+.admin select, .admin input[type=text], .admin textarea {
+  font: inherit; font-size: 0.9rem; padding: 0.3rem 0.5rem; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--card-bg); color: var(--text); width: 100%;
+}
+.actions { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-start; }
+.actions .card { flex: 1 1 18rem; margin-bottom: 0; }
+.experiment { margin-top: 0.4rem; padding: 0.4rem 0.6rem; border: 1px dashed var(--warn); border-radius: 6px; font-size: 0.8rem; }
+
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 0; font-size: 0.9rem; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+
+.diff { background: var(--warn-bg); }
+.diff td { color: var(--warn); }
+.warning { padding: 0.6rem 0.9rem; border-radius: 8px; background: var(--warn-bg); color: var(--warn); margin: 0.75rem 0; font-size: 0.92rem; }
+
+.health-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+.health-grid .card { margin-bottom: 0; padding: 0.9rem 1rem; }
+.health-grid h2 { margin-top: 0; font-size: 1rem; }
+.health-grid ul { margin: 0.3rem 0 0; padding-left: 1.1rem; font-size: 0.85rem; }
+.health-grid .big { font-size: 1.6rem; font-weight: 600; line-height: 1; }
+.health-grid .big.bad { color: var(--bad); }
+.health-grid .big.ok { color: var(--ok); }
+.health-grid .bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; flex-wrap: wrap; }
+.pairs { display: flex; flex-wrap: wrap; gap: 0.25rem 0.6rem; font-size: 0.85rem; margin: 0.3rem 0; }
+
+.timeline .msg-row { display: grid; gap: 0.15rem; }
+.timeline .msg-row.inbound { border-left: 3px solid var(--border); }
+.timeline .msg-row.outbound { border-left: 3px solid var(--accent); }
+.msg-body { white-space: pre-wrap; word-break: break-word; }
+.msg-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: flex-start; margin-top: 0.25rem; }
+.pre { white-space: pre-wrap; word-break: break-word; font-size: 0.85rem; }
+
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #17181a;
@@ -102,4 +219,17 @@ tr:last-child td { border-bottom: none; }
     --muted: #97968f;
   }
   th { background: rgba(255,255,255,0.04); }
+  :root {
+    --ok: #4cc27f;
+    --ok-bg: rgba(76,194,127,0.16);
+    --warn: #e0b34a;
+    --warn-bg: rgba(224,179,74,0.16);
+    --bad: #ef7777;
+    --bad-bg: rgba(239,119,119,0.16);
+    --info: #6db3f2;
+    --info-bg: rgba(109,179,242,0.16);
+    --neutral-bg: rgba(255,255,255,0.08);
+  }
+  .banner-bad { background: #8f2424; }
+  .btn-primary { background: #1f8a4c; }
 }

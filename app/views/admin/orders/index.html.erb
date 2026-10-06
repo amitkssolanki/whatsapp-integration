@@ -1,29 +1,36 @@
 <% content_for :title, "Admin · Orders" %>
-<%= render "admin/nav" %>
-<div class="wrap">
-  <h1>Orders</h1>
-  <p class="muted">Orders placed via the WhatsApp Cart "Send" action land here.</p>
+<% live_refresh %>
+<h1>Orders</h1>
+<p class="muted">Orders placed through the WhatsApp cart. Newest first, latest <%= Admin::OrdersController::LIST_LIMIT %>.</p>
 
-  <% if @orders.empty? %>
-    <p class="muted">No orders yet — place one from WhatsApp's native cart to see it appear here.</p>
-  <% else %>
-    <table>
-      <thead>
-        <tr><th>#</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Placed</th><th></th></tr>
-      </thead>
-      <tbody>
-        <% @orders.each do |order| %>
-          <tr>
-            <td>#<%= order.id %></td>
-            <td><%= order.customer.display_name.presence || order.customer.whatsapp_number %></td>
-            <td><%= order.order_items.sum(&:quantity) %></td>
-            <td><%= order.formatted_total %></td>
-            <td><%= order.status %></td>
-            <td><%= order.created_at.strftime("%b %-d, %H:%M") %></td>
-            <td><%= link_to "View →", admin_order_path(order) %></td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
+<div class="tabs">
+  <% Admin::OrdersController::FILTERS.each do |filter| %>
+    <%= link_to "#{filter.humanize} (#{@counts[filter]})", admin_orders_path(filter: filter), class: ("current" if filter == @filter) %>
   <% end %>
 </div>
+
+<% if @orders.empty? %>
+  <p class="muted">No orders here.</p>
+<% else %>
+  <table>
+    <thead>
+      <tr><th>#</th><th>Placed</th><th>Customer</th><th class="num">Items</th><th class="num">Total</th><th>Review</th><th>Status</th><th>Notification</th><th></th></tr>
+    </thead>
+    <tbody>
+      <% @orders.each do |order| %>
+        <% notification = latest_notification(order) %>
+        <tr>
+          <td>#<%= order.id %></td>
+          <td class="nowrap"><%= admin_time(order.created_at) %></td>
+          <td><%= display_name(order.customer) %><br><span class="muted"><%= display_phone(order.customer) %></span></td>
+          <td class="num"><%= order.order_items.sum(&:quantity) %></td>
+          <td class="num"><%= cents_to_money(order.total_cents) %></td>
+          <td><%= review_badge(order) %></td>
+          <td><%= order_status_badge(order) %></td>
+          <td><% if notification %><%= message_state(notification) %> <span class="muted">(<%= notification.purpose.to_s.tr("_", " ") %>)</span><% else %><span class="muted">—</span><% end %></td>
+          <td><%= link_to "View →", admin_order_path(order) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>

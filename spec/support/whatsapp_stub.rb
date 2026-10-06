@@ -18,6 +18,7 @@ RSpec.configure do |config|
     whatsapp.allow_unsigned = false
     whatsapp.admin_user = nil
     whatsapp.admin_password = nil
+    whatsapp.mask_pii = false
 
     example.run
   ensure

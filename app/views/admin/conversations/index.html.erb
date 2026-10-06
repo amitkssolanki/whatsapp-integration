@@ -1,23 +1,26 @@
 <% content_for :title, "Admin · Conversations" %>
-<%= render "admin/nav" %>
-<div class="wrap">
-  <h1>Conversations</h1>
-  <p class="muted">Every WhatsApp customer who has messaged the demo number.</p>
+<% live_refresh %>
+<h1>Conversations</h1>
+<p class="muted">Every customer who has messaged the number, latest activity first (up to <%= Admin::ConversationsController::LIST_LIMIT %>).</p>
 
+<% if @conversations.empty? %>
+  <p class="muted">No conversations yet.</p>
+<% else %>
   <table>
     <thead>
-      <tr><th>Customer</th><th>WhatsApp #</th><th>Messages</th><th>Last activity</th><th></th></tr>
+      <tr><th>Customer</th><th>Phone</th><th class="num">Messages</th><th>Last activity</th><th>24h window</th><th></th></tr>
     </thead>
     <tbody>
       <% @conversations.each do |conversation| %>
         <tr>
-          <td><%= conversation.customer.display_name.presence || "—" %></td>
-          <td><%= conversation.customer.whatsapp_number %></td>
-          <td><%= conversation.messages.size %></td>
-          <td><%= conversation.last_message_at&.strftime("%b %-d, %H:%M") || "—" %></td>
+          <td><%= display_name(conversation.customer) %></td>
+          <td><%= display_phone(conversation.customer) %></td>
+          <td class="num"><%= @message_counts.fetch(conversation.id, 0) %></td>
+          <td class="nowrap"><%= admin_time(conversation.last_message_at) %></td>
+          <td><%= window_badge(conversation) %></td>
           <td><%= link_to "View →", admin_conversation_path(conversation) %></td>
         </tr>
       <% end %>
     </tbody>
   </table>
-</div>
+<% end %>
