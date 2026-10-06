@@ -154,7 +154,8 @@ transaction; the rejection text is generic and does not repeat the internal reas
 `.resend_failed!(category:)`, and `#override_window_send!` (admin experiment: sets
 `guard_override_by`, the job then sends despite a closed window and logs
 `window.override_send`). A resend/requeue restarts the attempt: attempts back to 0 and the
-previous error and lifecycle timestamps cleared.
+previous error and lifecycle timestamps cleared, and so are the `wa_message_id` (resend) and any
+`guard_override_by`: an override covers one attempt, and must be confirmed again.
 
 **Undelivered** is a query, not a state: outbound, status in (accepted, sent),
 `accepted_at < 10.minutes.ago`, `delivered_at IS NULL`.

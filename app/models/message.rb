@@ -158,7 +158,9 @@ class Message < ApplicationRecord
     end
 
     previous = error_category
-    start_over!(:pending, "message.resend", by: by, previous_category: previous, wa_message_id: nil)
+    # An override (override_window_send!) covered one attempt only: a resend
+    # must be confirmed again, so it never carries the old override along.
+    start_over!(:pending, "message.resend", by: by, previous_category: previous, wa_message_id: nil, guard_override_by: nil)
   end
 
   # blocked -> pending, only while the 24h window is open now.
