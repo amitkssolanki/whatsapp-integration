@@ -82,4 +82,5 @@ if config.catalog_id.present?
 end
 
 puts
-puts checks.any? && checks.all? ? "Gate A: all checks passed" : "Gate A: NOT ready (see FAIL/NONE above)"
+ready = checks.any? && checks.all?
+puts(ready ? "Gate A: all checks passed" : "Gate A: NOT ready (see FAIL/NONE above)")
