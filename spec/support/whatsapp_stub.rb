@@ -12,6 +12,7 @@ RSpec.configure do |config|
     whatsapp.token = nil
     whatsapp.phone_number_id = nil
     whatsapp.catalog_id = nil
+    whatsapp.api_version = "v26.0"
     whatsapp.app_secret = TEST_APP_SECRET
     whatsapp.verify_token = TEST_VERIFY_TOKEN
     whatsapp.allow_unsigned = false
