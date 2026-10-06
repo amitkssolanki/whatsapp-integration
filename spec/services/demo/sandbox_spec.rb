@@ -97,3 +97,30 @@ RSpec.describe Demo::Sandbox do
     expect(FaultInjection.active).to eq(%w[send:5xx processing:order])
   end
 end
+
+RSpec.describe "Rows created inside a Demo::Sandbox" do
+  let(:meta) { Demo::FakeMeta.new }
+  let(:body) { '{"object":"whatsapp_business_account","entry":[]}' }
+
+  def ingest = Webhooks::Ingest.new(raw_body: body, signature_header: sign(body), request_id: "t").call
+
+  it "are synthetic by construction: deliveries and customers, whoever creates them" do
+    inside_delivery = inside_customer = nil
+    Demo::Sandbox.run(meta: meta, queue: Demo::InlineQueue.new) do
+      inside_delivery = ingest
+      inside_customer = Customer.resolve!(whatsapp_number: "15550103999", display_name: "Anyone")
+    end
+
+    expect(inside_delivery.reload.synthetic).to be(true)
+    expect(inside_customer.reload.synthetic).to be(true)
+  end
+
+  it "are real outside a sandbox, and an existing real customer is left alone inside one" do
+    real = Customer.resolve!(whatsapp_number: "15550100123", display_name: "Real")
+    expect(ingest.reload.synthetic).to be(false)
+
+    Demo::Sandbox.run(meta: meta, queue: Demo::InlineQueue.new) { Customer.resolve!(whatsapp_number: "15550100123") }
+
+    expect(real.reload.synthetic).to be(false)
+  end
+end
