@@ -23,6 +23,9 @@ class Sanitizer
   PHONE_KEYS = %w[from wa_id recipient_id display_phone_number input].freeze
   # Free text typed by real people can contain names; only these survive verbatim.
   SAFE_TEXT = [ "Hi", "Hello", "hi", "hello", "menu", "" ].freeze
+  # A cart's free-text note (`order.text`) is typed by the customer too; only
+  # the empty note (what real native carts send) survives verbatim.
+  SAFE_ORDER_TEXT = [ "" ].freeze
 
   def initialize
     @maps = Hash.new { |h, k| h[k] = {} }
@@ -53,6 +56,9 @@ class Sanitizer
     return synthetic(:user_id, value) { |n| format("US.%016d", 1_000_000_000_000_000 + n) } if key.to_s.end_with?("user_id")
     return synthetic(:phone, value) { |n| format("1555010%04d", n) } if PHONE_KEYS.include?(key)
     return synthetic(:name, value) { |n| "Test Customer #{n}" } if key == "name"
+    # Meta's usernames (a user chose them) identify people as much as a name does.
+    return synthetic(:username, value) { |n| "test_user_#{n}" } if key.to_s.end_with?("username")
+    return SAFE_ORDER_TEXT.include?(value) ? value : synthetic(:order_text, value) { |n| "test order note #{n}" } if key == "text"
     return synthetic(:fbtrace, value) { |n| "FAKETRACE#{n}" } if key == "fbtrace_id"
     return SAFE_TEXT.include?(value) ? value : synthetic(:text, value) { |n| "test message #{n}" } if key == "body"
     if key == "id" || key == "phone_number_id" || key == "catalog_id"

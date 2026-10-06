@@ -1,21 +1,22 @@
 module Admin
-  # Webhook deliveries as stored. The raw body is never loaded here: it holds
-  # phone numbers, names and message text, and the page has no use for it.
+  # Webhook deliveries as stored. The raw body (raw_body and its binary twin
+  # raw_body_base64) is never loaded here: it holds phone numbers, names and
+  # message text, and the page has no use for it.
   class DeliveriesController < BaseController
     LIST_LIMIT = 100
     ITEM_LIMIT = 100
-    SAFE_COLUMNS = (WebhookDelivery.column_names - %w[raw_body]).freeze
+    SAFE_COLUMNS = (WebhookDelivery.column_names - WebhookDelivery::BODY_COLUMNS).freeze
 
     def index
       @filter = WebhookDelivery.statuses.key?(params[:status]) ? params[:status] : "all"
       @counts = WebhookDelivery.group(:status).count
-      scope = WebhookDelivery.select(SAFE_COLUMNS).order(received_at: :desc, id: :desc)
+      scope = WebhookDelivery.without_bodies.order(received_at: :desc, id: :desc)
       scope = scope.where(status: @filter) unless @filter == "all"
       @deliveries = scope.limit(LIST_LIMIT)
     end
 
     def show
-      @delivery = WebhookDelivery.select(SAFE_COLUMNS).find(params[:id])
+      @delivery = WebhookDelivery.without_bodies.find(params[:id])
       @items = Array(@delivery.outcome["items"]).first(ITEM_LIMIT)
     end
 

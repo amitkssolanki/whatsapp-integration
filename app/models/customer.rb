@@ -9,6 +9,10 @@ class Customer < ApplicationRecord
   validates :wa_user_id, uniqueness: true, allow_nil: true
   validate :identified
 
+  # Ops::Purge anonymised this customer (name and phone number removed, user id
+  # replaced by "purged:<id>"): it can no longer be written to.
+  def purged? = purged_at.present?
+
   # Finds or creates the customer (and its conversation) for an inbound
   # webhook. docs/v2/DESIGN.md §6: the business-scoped user id wins when
   # present, the phone number is the fallback.

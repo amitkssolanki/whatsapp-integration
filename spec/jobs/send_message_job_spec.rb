@@ -165,6 +165,78 @@ RSpec.describe SendMessageJob, type: :job do
     end
   end
 
+  describe "a retry_scheduled message that Meta already reported on" do
+    include ActiveJob::TestHelper
+
+    def status_body(message, status, wamid: "wamid.FAKE-A", errors: nil)
+      json = fixture_json("status_sent")
+      item = json.dig("entry", 0, "changes", 0, "value", "statuses", 0)
+      item.merge!("id" => wamid, "status" => status, "biz_opaque_callback_data" => message.id.to_s, "timestamp" => now.to_i.to_s)
+      item["errors"] = errors if errors
+      json.dig("entry", 0, "changes", 0, "value", "metadata")["phone_number_id"] = Rails.application.config.whatsapp.phone_number_id
+      json.to_json
+    end
+
+    it "is settled by the status webhook and the scheduled retry sends nothing (5xx, then delivered, then the retry)" do
+      message = outbound
+      graph.reply(503, { "error" => { "message" => "down" } }) # Meta in fact processed it
+      perform(message)
+      expect(message.reload).to be_retry_scheduled
+
+      deliver_and_process(status_body(message, "delivered"))
+      expect(message.reload).to have_attributes(status: "delivered", wa_message_id: "wamid.FAKE-A", next_attempt_at: nil, error_category: nil)
+
+      log = capture_log { perform(message) } # the retry job fires
+
+      expect(graph.calls).to eq(1)
+      expect(message.reload).to have_attributes(status: "delivered", attempts: 1)
+      expect(log).to include("send.skipped")
+    end
+
+    it "refuses the claim, logs why, and catches up when the evidence only reached the row as timestamps" do
+      message = outbound(status: :retry_scheduled, attempts: 1, error_category: "transient_platform", next_attempt_at: now + 30.seconds)
+      Message.where(id: message.id).update_all(wa_message_id: "wamid.FAKE-A", delivered_at: now) # the stamp landed, the transition did not
+
+      log = capture_log { perform(message) }
+
+      expect(graph.calls).to eq(0)
+      expect(message.reload).to have_attributes(status: "delivered", attempts: 1, next_attempt_at: nil, error_category: nil)
+      expect(log).to include("event=send.claim_refused_already_processed").and include("message_id=#{message.id}")
+    end
+
+    it "refuses on a bare wa_message_id too and sends nothing" do
+      message = outbound(status: :retry_scheduled, attempts: 1)
+      Message.where(id: message.id).update_all(wa_message_id: "wamid.FAKE-A")
+
+      log = capture_log { perform(message) }
+
+      expect(graph.calls).to eq(0)
+      expect(message.reload).to have_attributes(status: "retry_scheduled", attempts: 1)
+      expect(log).to include("send.claim_refused_already_processed")
+    end
+
+    it "lets a failed status through the opaque id settle it as failed instead of leaving it waiting forever" do
+      message = outbound
+      graph.reply(503, { "error" => { "message" => "down" } })
+      perform(message)
+
+      deliver_and_process(status_body(message, "failed", errors: [ { "code" => 131_026, "title" => "Undeliverable" } ]))
+      perform(message)
+
+      expect(graph.calls).to eq(1)
+      expect(message.reload).to have_attributes(status: "failed", error_category: "recipient_undeliverable", wa_message_id: "wamid.FAKE-A")
+    end
+
+    it "still retries a message nobody has reported on" do
+      message = outbound(status: :retry_scheduled, attempts: 1)
+      graph.reply(200, ok_send("wamid.FAKE-B"))
+
+      perform(message)
+
+      expect(message.reload).to have_attributes(status: "accepted", wa_message_id: "wamid.FAKE-B", attempts: 2)
+    end
+  end
+
   describe "retryable failures" do
     it "schedules a retry for a network failure that never left, with the first backoff (30 s) and a delayed job" do
       message = outbound

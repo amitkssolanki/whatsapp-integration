@@ -7,7 +7,7 @@ module Webhooks
 
     def initialize(delivery:, item:)
       @delivery = delivery
-      @item = item
+      @item, @nul_replaced = NulScrubber.call(item) # error text is stored; see NulScrubber
     end
 
     def call
@@ -15,7 +15,11 @@ module Webhooks
       status = @item["status"].to_s
       return result(wa_message_id, "ignored", "status=#{status.presence || 'missing'}") unless known_status?(status)
 
-      message = find_message(wa_message_id)
+      message = find_by_wa_message_id(wa_message_id)
+      unless message
+        message, stale = find_by_opaque_id(wa_message_id)
+        return result(wa_message_id, "orphan", "stale id after resend") if stale
+      end
       return result(wa_message_id, "orphan", "no outbound message matches") unless message
 
       status == "failed" ? apply_failure(message, wa_message_id) : apply_lifecycle(message, wa_message_id, status)
@@ -53,22 +57,38 @@ module Webhooks
       end
     end
 
-    # Meta's id first. A message whose send was never recorded (a crash between
-    # the HTTP response and our write) has no wa_message_id yet; it is found by
-    # the id we asked Meta to echo, and gets its wa_message_id on first contact.
-    def find_message(wa_message_id)
-      message = Message.outbound.find_by(wa_message_id: wa_message_id) if wa_message_id.present?
-      return message if message
+    def find_by_wa_message_id(wa_message_id)
+      Message.outbound.find_by(wa_message_id: wa_message_id) if wa_message_id.present?
+    end
 
+    # Fallback after Meta's id missed: the id we asked Meta to echo. A message
+    # whose send was never recorded (a crash between the HTTP response and our
+    # write) has no wa_message_id yet; it is found this way and gets its
+    # wa_message_id on first contact.
+    #
+    # The opaque id names the message, not the attempt, so it is trusted ONLY
+    # while the message has no wa_message_id of its own. One that already holds
+    # a different id has been (re)sent since: this status belongs to an earlier
+    # attempt (e.g. a replayed or redelivered webhook after an operator resend)
+    # and must not touch the current one. A `pending` message has no attempt in
+    # flight at all (an operator resend wipes the id and the evidence), so a
+    # status cannot belong to it either.
+    #
+    # Returns [message, stale]; stale is true when a message matched but was
+    # refused.
+    def find_by_opaque_id(wa_message_id)
       opaque = @item["biz_opaque_callback_data"].to_s
-      return nil unless opaque.match?(/\A\d+\z/)
+      return [ nil, false ] unless opaque.match?(/\A\d+\z/)
 
       message = Message.outbound.find_by(id: opaque.to_i)
-      if message && message.wa_message_id.nil? && wa_message_id.present?
+      return [ nil, false ] unless message
+      return [ nil, true ] if message.wa_message_id.present? || message.pending?
+
+      if wa_message_id.present?
         Message.where(id: message.id, wa_message_id: nil).update_all(wa_message_id: wa_message_id)
         message.reload
       end
-      message
+      [ message, false ]
     end
 
     def status_time
@@ -81,7 +101,7 @@ module Webhooks
     end
 
     def result(ref, outcome, detail)
-      ItemResult.for("status", ref, outcome, detail)
+      ItemResult.for("status", ref, outcome, NulScrubber.detail(detail, @nul_replaced))
     end
   end
 end

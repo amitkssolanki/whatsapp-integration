@@ -13,7 +13,8 @@ module Ops
         messages: @scope.count,
         by_type: Stats.tally(@scope.pluck(:message_type), blank: "unknown"),
         distinct_customers: customers.count,
-        customers_without_phone: customers.where(whatsapp_number: [ nil, "" ]).count
+        # A purged customer's number is gone; `purged_had_phone` remembers the answer.
+        customers_without_phone: customers.where(whatsapp_number: [ nil, "" ]).where("customers.purged_had_phone IS NOT TRUE").count
       }
     end
   end

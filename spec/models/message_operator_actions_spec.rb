@@ -27,6 +27,23 @@ RSpec.describe Message, "operator actions", type: :model do
       expect(log).to include("event=message.resend").and include("by=amit").and include("previous_category=auth_config")
     end
 
+    it "clears a window override: the resent message is blocked again until the operator re-confirms (review 2 #8)" do
+      configure_whatsapp
+      open_window(conversation, at: 30.hours.ago)
+      message = create_outbound(status: :blocked, customer: customer, error_category: "window_closed", blocked_at: Time.current)
+      message.override_window_send!(by: "amit")
+      graph.reply(500, { "error" => { "message" => "x", "code" => 190 } }) # auth_config: resendable
+      SendMessageJob.perform_now(message.id)
+      expect(message.reload).to have_attributes(status: "failed", error_category: "auth_config", guard_override_by: "amit")
+
+      expect(message.resend!(by: "amit")).to be_ok
+      expect(message.reload.guard_override_by).to be_nil
+      SendMessageJob.perform_now(message.id)
+
+      expect(graph.calls).to eq(1) # the resend was blocked by the guard, not sent
+      expect(message.reload).to have_attributes(status: "blocked", error_category: "window_closed")
+    end
+
     it "is allowed for exactly the resendable categories" do
       Message::RESENDABLE_ERROR_CATEGORIES.each { |category| expect(failed(category).resend!(by: "a")).to be_ok, category }
 

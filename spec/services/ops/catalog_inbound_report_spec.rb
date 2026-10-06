@@ -12,7 +12,7 @@ RSpec.describe Ops::Report, "catalog and inbound metrics" do
 
   describe "catalog" do
     it "reports zeros for an empty period" do
-      expect(report[:catalog]).to eq(
+      expect(report[:real][:catalog]).to eq(
         push_runs: { "queued" => 0, "submitted" => 0, "succeeded" => 0, "partially_failed" => 0, "failed" => 0 },
         reconcile_runs: { "queued" => 0, "submitted" => 0, "succeeded" => 0, "partially_failed" => 0, "failed" => 0 },
         last_reconcile: {
@@ -40,7 +40,7 @@ RSpec.describe Ops::Report, "catalog and inbound metrics" do
       synced.update_columns(catalog_synced_digest: synced.catalog_digest)
       expect(dirty.catalog_dirty?).to be(true)
 
-      catalog = report[:catalog]
+      catalog = report[:real][:catalog]
 
       expect(catalog[:push_runs]).to eq("queued" => 0, "submitted" => 0, "succeeded" => 2, "partially_failed" => 0, "failed" => 1)
       expect(catalog[:reconcile_runs]).to include("succeeded" => 2, "failed" => 1)
@@ -56,7 +56,7 @@ RSpec.describe Ops::Report, "catalog and inbound metrics" do
     end
 
     it "reports zeros for an empty period" do
-      expect(report[:inbound]).to eq(messages: 0, by_type: {}, distinct_customers: 0, customers_without_phone: 0)
+      expect(report[:real][:inbound]).to eq(messages: 0, by_type: {}, distinct_customers: 0, customers_without_phone: 0)
     end
 
     it "counts messages by type and distinct customers, including a BSUID-only customer" do
@@ -70,7 +70,7 @@ RSpec.describe Ops::Report, "catalog and inbound metrics" do
       inbound(other, "text", to)
       create_outbound(customer: with_phone, status: :sent, created_at: t)
 
-      expect(report[:inbound]).to eq(messages: 3, by_type: { "text" => 2, "order" => 1 }, distinct_customers: 2, customers_without_phone: 1)
+      expect(report[:real][:inbound]).to eq(messages: 3, by_type: { "text" => 2, "order" => 1 }, distinct_customers: 2, customers_without_phone: 1)
     end
   end
 end

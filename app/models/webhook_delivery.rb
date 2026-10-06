@@ -27,6 +27,13 @@ class WebhookDelivery < ApplicationRecord
 
   REPLAYABLE_STATUSES = %w[failed partially_failed processed].freeze
 
+  # The bodies hold phone numbers, names and message text, and can be megabytes.
+  # Anything that only displays deliveries (the admin pages, Health) reads
+  # `without_bodies`; a record loaded that way raises MissingAttributeError if
+  # code reaches for a body by accident.
+  BODY_COLUMNS = %w[raw_body raw_body_base64].freeze
+  scope :without_bodies, -> { select(column_names - BODY_COLUMNS) }
+
   validates :body_sha256, :received_at, presence: true
   # An empty (or all-NUL, once scrubbed) body is a legitimate thing to have
   # received and signed; only a missing one is a bug.

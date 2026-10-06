@@ -1,6 +1,8 @@
 module Ops
   # How long Meta took between lifecycle steps, in seconds, for outbound
   # messages created in the period that reached both steps. Medians only.
+  # Real rows only by default: an injected or simulated message says nothing
+  # about Meta's latency.
   class LatencySection
     STEPS = {
       accepted_to_sent: %i[accepted_at sent_at],
@@ -9,8 +11,8 @@ module Ops
       accepted_to_delivered: %i[accepted_at delivered_at]
     }.freeze
 
-    def initialize(period)
-      @scope = Message.outbound.where(created_at: period)
+    def initialize(period, real: true)
+      @scope = Scopes.outbound(period, real: real)
     end
 
     def call

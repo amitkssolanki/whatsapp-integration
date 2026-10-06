@@ -38,8 +38,8 @@ Evidence is labelled by kind. **Real** is traffic from V1's live run on
 | Live Meta verification of V2 | **Not done** | |
 | Meta cutover, operating period | **Not done** | Protocol drafted in `docs/operating/PROTOCOL.md`; it records nothing yet |
 
-Observed on `main` at the time of writing: `bundle exec rspec` reports 958 examples, 0 failures
-(local PostgreSQL, about 12 seconds). Specs verify the code against the
+Observed on `main` at the time of writing: `bundle exec rspec` reports 1020 examples, 0 failures
+(local PostgreSQL, about 17 seconds). Specs verify the code against the
 fixtures and stubs described above; they say nothing about how Meta behaves.
 
 
@@ -152,7 +152,9 @@ at most once, even when the state cannot advance (a late `delivered` after
 `read` still fills `delivered_at`). A `failed` after `delivered` or `read`
 changes nothing and is recorded as an `anomaly` item. Statuses that arrive while
 a send is still `sending` stamp their time only; the state catches up when the
-send settles, so proof of delivery is never stranded behind `unknown`. A status
+send settles, so proof of delivery is never stranded behind `unknown`. The same
+holds for a `retry_scheduled` message (a 5xx that Meta had in fact processed): the status
+settles it and the scheduled retry refuses to send a second copy. A status
 for an unknown message is stored as an `orphan` item and applied on replay.
 
 **No automatic resend of ambiguous sends.** A read timeout, or a connection
@@ -297,22 +299,33 @@ bin/brakeman --no-pager && bin/bundler-audit
 `main`: `lint` (RuboCop), `security` (Brakeman, bundler-audit), and `test`
 (`rspec` against PostgreSQL 17). `bin/rails ops:report FROM=2026-10-20
 TO=2026-11-10 FORMAT=md` prints delivery, order, outbound, latency, status
-anomaly, window, catalog and inbound metrics computed only from the database.
+anomaly, window, catalog and inbound metrics computed only from the database,
+twice: `real` (rows with no injected fault and no simulated demo customer) and `all`, plus
+an `injected` summary by label. `bin/rails ops:repost_delivery ID=… CONFIRM=yes` re-ingests
+a stored delivery's exact bytes as a new delivery labeled `injected:repost` (scenario 3), so
+it never counts as one of Meta's own duplicates.
 
 Operating tools (`docs/operating/PROTOCOL.md`):
 
-- `FAULT_INJECT=processing:order,send:5xx,send:read_timeout_after_send` makes
-  deliberate, labeled failures for the scenario runs. Honored only in
-  development/test, or in production with `FAULT_INJECTION_ALLOWED=1`
-  (production refuses to boot with the first and not the second). Health shows
-  a red banner while any toggle is set.
+- Fault injection (`processing:order`, `send:5xx`, `send:read_timeout_after_send`) makes
+  deliberate, labeled failures for the scenario runs. The toggles are stored in the
+  database and switched on the Health page ("Fault injection" panel, shown only when
+  allowed; the operator's name is recorded), so no redeploy is needed. Allowed only in
+  development/test, or in production with `FAULT_INJECTION_ALLOWED=1` (a deploy-time
+  setting, default `"0"` in `config/deploy.yml`). In development and test the
+  `FAULT_INJECT` environment variable is an extra source; production refuses to boot with
+  it set. A toggle fires for every matching event until switched off. Health shows a
+  red banner while any toggle is on.
 - `bin/rails demo:simulate` builds a local, clearly simulated dataset for
   screenshots: fake customers ("Demo Customer N", +1 555 010 numbers), signed
   webhooks through the real controller, an in-process fake Graph API. It runs
   only in development and only against a database whose name contains `_demo`:
   `DATABASE_URL=postgres:///whatsapp_integration_demo bin/rails db:prepare db:seed demo:simulate`.
-- `bin/rails ops:purge_payloads BEFORE=YYYY-MM-DD CONFIRM=yes` removes raw
-  webhook bodies and message payloads older than the date; counts and statuses stay.
+- `bin/rails ops:purge BEFORE=YYYY-MM-DD CONFIRM=yes` (alias `ops:purge_payloads`) removes
+  raw webhook bodies, message text, Meta message ids, order notes and customers' names and
+  phone numbers for records older than the date; counts and statuses stay. It skips, and
+  reports, work still in use (unapplied deliveries, unsent/failed/unknown messages) unless
+  `FORCE=yes`.
 
 Real Meta traffic needs a public HTTPS URL for `/webhooks/whatsapp`; that is
 not automated here.
@@ -331,8 +344,9 @@ subscription, catalog connection) are performed manually by the account owner;
 no automation in this repository drives them. `script/meta/check_state.rb` is a
 read-only checker (GET requests from a fixed allowlist, no write path).
 [docs/operating/PROTOCOL.md](docs/operating/PROTOCOL.md) defines what may be
-called an operating period and how scenarios are logged; none has happened, and
-some of its scenarios depend on tooling that is not on this branch.
+called an operating period and how scenarios are logged; none has happened. The
+tooling its scenarios need (fault injection switch, `ops:repost_delivery`,
+`ops:report`, `ops:purge`, the demo simulator) is all on `main`.
 
 ## Limitations and non-goals
 

@@ -101,6 +101,7 @@ module Demo
       saved_queues = job_classes.index_with { |klass| klass._queue_adapter }
       base_queue = ActiveJob::Base.queue_adapter
       saved_fault = ENV["FAULT_INJECT"]
+      saved_stored_faults = OpsSetting.current.fault_inject
 
       config.token = "demo-token-not-real"
       config.phone_number_id = PHONE_NUMBER_ID
@@ -111,6 +112,7 @@ module Demo
       WhatsappClient.adapter = @meta.adapter
       job_classes.each { |klass| klass.queue_adapter = @queue }
       ENV.delete("FAULT_INJECT")
+      OpsSetting.current.update_columns(fault_inject: []) # toggles stored in this database must not leak into the run
 
       yield
     ensure
@@ -118,6 +120,7 @@ module Demo
       WhatsappClient.adapter = saved_adapter if saved_adapter
       saved_queues&.each { |klass, adapter| klass.queue_adapter = adapter || base_queue }
       saved_fault ? ENV["FAULT_INJECT"] = saved_fault : ENV.delete("FAULT_INJECT")
+      OpsSetting.current.update_columns(fault_inject: saved_stored_faults) if saved_stored_faults
     end
 
     # Job classes may carry their own adapter (Rails assigns one per class when

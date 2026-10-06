@@ -60,7 +60,7 @@ transaction is atomic with it.
 | last_attempted_at, processed_at | datetime | |
 | replay_count | integer, null: false, default 0 | |
 | last_replayed_at, last_replayed_by | datetime, string | |
-| purged_at | datetime | set by `ops:purge_payloads` (§13); raw_body is then '' and raw_body_base64 NULL, and the delivery can no longer be replayed |
+| purged_at | datetime | set by `ops:purge` (§13); raw_body is then '' and raw_body_base64 NULL, outcome refs are hashed, and the delivery can no longer be replayed |
 
 Indexes: `[status, received_at]`, `body_sha256`, `received_at`.
 
@@ -122,7 +122,7 @@ sent 40, delivered 50, read 60, failed 90, blocked 91, unknown 92`; inbound rows
 |---|---|
 | pending | sending, blocked |
 | sending | accepted, retry_scheduled, failed, unknown, blocked |
-| retry_scheduled | sending, blocked |
+| retry_scheduled | sending (only while Meta has reported nothing: no wa_message_id, no sent/delivered/read timestamp), blocked, sent, delivered, read, failed (the latter four only from a status webhook) |
 | accepted | sent, delivered, read, failed |
 | sent | delivered, read, failed |
 | delivered | read |
@@ -140,6 +140,13 @@ only stamp their timestamp; whenever the message then moves to `accepted` or
 `unknown` (including via the stall sweeper) its state catches up to the furthest
 stamped step, so proof of delivery is never stranded behind `unknown`.
 
+A `retry_scheduled` message can be advanced by a status webhook too: when the POST got a
+5xx or 131000 but Meta did process it, a `sent`/`delivered`/`read` status (found by our
+opaque id, which also stores the `wa_message_id`) moves the row straight to that step and
+clears the retry bookkeeping. The retry's claim refuses a message with a `wa_message_id`
+or a sent/delivered/read timestamp (logged `send.claim_refused_already_processed`) and
+applies the same catch-up instead, so the customer never receives the message twice.
+
 Operator actions (backend only, they write rows and enqueue jobs): `Order#accept!/reject!`
 (reason required; queue the `order:<id>:accepted|rejected` notification in the same
 transaction; the rejection text is generic and does not repeat the internal reason),
@@ -147,7 +154,8 @@ transaction; the rejection text is generic and does not repeat the internal reas
 `.resend_failed!(category:)`, and `#override_window_send!` (admin experiment: sets
 `guard_override_by`, the job then sends despite a closed window and logs
 `window.override_send`). A resend/requeue restarts the attempt: attempts back to 0 and the
-previous error and lifecycle timestamps cleared.
+previous error and lifecycle timestamps cleared, and so are the `wa_message_id` (resend) and any
+`guard_override_by`: an override covers one attempt, and must be confirmed again.
 
 **Undelivered** is a query, not a state: outbound, status in (accepted, sent),
 `accepted_at < 10.minutes.ago`, `delivered_at IS NULL`.
@@ -183,6 +191,10 @@ previous error and lifecycle timestamps cleared.
 | POST, valid, stored and enqueued | 200 | yes, `received` |
 | POST, DB/enqueue failure | 500 (Meta retries) | no |
 
+The route takes no format: `/webhooks/whatsapp.json` is a 404. `WebhookGuard` (413/401 before
+the body is parsed) normalises the path like the router (trailing and doubled slashes, any
+`.ext` suffix), so no spelling of the path skips it.
+
 HTTP status tells Meta whether to retry. The Health page tells the operator what
 failed. Processing failures are never in the HTTP response and never silent.
 
@@ -208,9 +220,17 @@ Per message item (one transaction):
 4. Enqueue SendMessageJob for each newly inserted outbound row.
 
 Per status item (one transaction): find by `wa_message_id`, else by
-`biz_opaque_callback_data` (our message id). On first match by opaque id, store the
-`wa_message_id`. Apply forward-only (§3). `errors[]` on `failed` → classify (§7).
+`biz_opaque_callback_data` (our message id). The opaque id names the message, not the
+attempt, so it is trusted only while the message has no `wa_message_id` (and is not
+`pending`, i.e. an attempt is or was in flight): then the `wa_message_id` is stored on
+first match. A message that already holds a different id has been resent since, so the
+status is an `orphan` ("stale id after resend") and changes nothing. Apply forward-only (§3). `errors[]` on `failed` → classify (§7).
 No match → `orphan` item outcome (replay applies it later if the message appears).
+
+Before an item is written, every NUL (`\u0000`) in any of its strings (message text, order note,
+product fields, the sender's profile name, a status's error text; keys too) is replaced by U+FFFD
+(PostgreSQL text/jsonb cannot hold it) and the item's outcome detail gets `nul_replaced`
+(`Webhooks::NulScrubber`). Without this an order carrying a NUL would fail on every replay.
 
 Item failures roll back that item only; the delivery becomes `partially_failed` (or
 `failed` if nothing applied). Infrastructure errors (connection/deadlock) are retried
@@ -235,8 +255,8 @@ Classify by Meta `code` first; HTTP status is only a fallback when there is no c
 | account_quality | 131048, 368, 131031, 131064 | no | stop scenario runs |
 | rate_limited | 4, 80007, 130429, 131056, HTTP 429 | yes, long backoff | no Retry-After header exists; 131056 waits 4^attempt seconds |
 | transient_platform | 1, 2, 131000, 131016, 131057, 133004, 2494100, HTTP 5xx | yes | |
-| transient_network | could not connect (open timeout, refused, DNS) | yes | request never left |
-| ambiguous | read timeout, connection reset after the request was sent | **no** → `unknown` | resolved only by a correlated status webhook |
+| transient_network | could not connect (open timeout, refused, DNS), or a TLS handshake/verification failure (`certificate verify failed`, `wrong version number`, `handshake failure`, `no protocols available`) | yes | request never left |
+| ambiguous | read timeout, connection reset after the request was sent, any other SSL error (e.g. `SSL_read: unexpected eof`: Faraday raises SSLError for failures while reading the response too) | **no** → `unknown` | resolved only by a correlated status webhook |
 | unclassified | anything else | no | flagged as a taxonomy gap |
 
 ✓ = received by V1 (real evidence). Everything else comes from Meta's documentation
@@ -293,9 +313,19 @@ order_id, job_id, error_category. Never log Meta message ids (they embed phone
 numbers), phone numbers (mask to last 4), names, or payload bodies.
 `DEMO_MASK_PII=1` masks phone numbers and names in every admin view.
 
+Error text that leaves a job is stored by Solid Queue in `solid_queue_failed_executions.error`
+(exception class, message, backtrace; solid_queue 1.7.0) and logged by Active Job, so
+`ApplicationJob` re-raises any escaping error with its message scrubbed (`Redact`): same class,
+backtrace and cause chain (retry_on and `InfrastructureError` still match), but no Meta ids or
+phone numbers from, say, a unique-violation DETAIL. Admin pages and the Health snapshot read
+deliveries with `WebhookDelivery.without_bodies`, so neither `raw_body` nor `raw_body_base64` is
+ever loaded for display. `ops:report` records the commit as `GIT_SHA`, else `KAMAL_VERSION`
+(Kamal passes it to every app container, kamal 2.12.0 `lib/kamal/commands/app.rb`), else the
+local git checkout, else `unknown`.
+
 ## 12. Fault injection (operating-period scenarios 4, 6, 7)
 
-`FaultInjection` reads `FAULT_INJECT` (comma-separated) on every check:
+`FaultInjection` reads the stored toggles on every check (see below):
 
 | toggle | effect |
 |---|---|
@@ -303,21 +333,61 @@ numbers), phone numbers (mask to last 4), names, or payload bodies.
 | `send:5xx` | `WhatsappClient` returns a synthetic 503 (`transient_platform`, retryable) without calling Meta. The message's `error_details` starts with `[injected]`. |
 | `send:read_timeout_after_send` | the real request is made, the response is discarded and the ambiguous result returned, so the message becomes `unknown`. `error_details` starts with `[injected]`. |
 
-Only honoured when `Rails.env.local?`, or in production with `FAULT_INJECTION_ALLOWED=1`;
-production refuses to boot with `FAULT_INJECT` set but not allowed. A toggle fires for
-every matching event while set; every firing logs `fault.injected` (warn) with the kind.
-The Health page shows a red banner listing the active toggles.
+Two gates, both needed. (1) The environment allows it: `Rails.env.local?`, or in production
+`FAULT_INJECTION_ALLOWED=1` (set in `config/deploy.yml` `env.clear`, default `"0"`; changing it is a
+redeploy). (2) The toggle is on. Toggles live in the single-row `ops_settings` table
+(`fault_inject` string[] default `[]`, `updated_by`, `updated_at`), switched on the Health page
+"Fault injection" panel (shown only where allowed; checkboxes for the three kinds, a confirm box
+required to switch something ON, POST `/admin/fault_injection`, stores the operator as
+`updated_by` and logs `fault.toggled`). Because the switch is a database write, a scenario run needs
+no redeploy (a redeploy restarts Puma and the in-process Solid Queue, turning in-flight sends
+into `unknown`). In development and test the `FAULT_INJECT` environment variable (comma-separated)
+is read as an additional source; in production it is ignored and the app refuses to boot with it
+set at all (`ProductionConfigCheck`). Stored toggles that are not allowed here, or not a known
+kind, show on Health as "set but ignored".
+
+A toggle fires for EVERY matching event while it is on, for every participant, so the procedure is:
+switch on, run one scenario, switch off. Every firing logs `fault.injected` (warn) with the kind
+and is labeled on the row (`injected_faults`). The Health page
+shows a red banner listing the active toggles.
+
+`Ops::Report` computes every section twice: `real` (rows whose `injected_faults` is empty; for
+outbound messages also not belonging to a customer whose name starts with "Demo Customer") and
+`all`, plus an `injected` summary of the labels. Latency is real-only. Scenario 3's re-post is
+`bin/rails ops:repost_delivery ID=<id> CONFIRM=yes` (`Ops::Repost`): it re-ingests the stored exact
+bytes and signature header through `Webhooks::Ingest` (no HTTP) and labels the new delivery
+`injected:repost` in the same transaction.
 
 ## 13. Purge after the operating period
 
-`bin/rails ops:purge_payloads BEFORE=YYYY-MM-DD CONFIRM=yes` (`Ops::Purge`) removes the
-personal data that raw payloads hold and keeps all aggregates: `webhook_deliveries` received
-before the date get `raw_body = ''`, `raw_body_base64 = NULL` and `purged_at`; `messages`
-created before the date get `raw_payload = {}`, except outbound messages still
-`pending`/`sending`/`retry_scheduled` (their payload is the request about to be sent; the
-task reports how many were skipped). Without `CONFIRM=yes` the task refuses and prints what
-it would do. BEFORE may not be in the future. A purged delivery refuses replay
-("the raw body was purged on <date>") and the admin UI hides its Replay button.
+`bin/rails ops:purge BEFORE=YYYY-MM-DD CONFIRM=yes [FORCE=yes]` (`Ops::Purge`; the old name
+`ops:purge_payloads` is an alias) keeps the consent promise ("phone number and name are stored
+until the purge date") and keeps every aggregate. For records created (received, for
+deliveries) before the date:
+
+| table | removed | marker |
+|---|---|---|
+| `webhook_deliveries` | `raw_body = ''`, `raw_body_base64 = NULL`, Meta ids in `outcome.items[].ref` replaced by `purged:<12 hex of sha256>` | `purged_at` |
+| `messages` | `body`, `raw_payload = {}`, `wa_message_id`, `error_details` set to NULL / empty | `purged_at` |
+| `orders` | `wa_order_note` NULL | |
+| `customers` whose last activity (creation, last message either way, last order) is before the date | `display_name` NULL, `whatsapp_number` NULL, `wa_user_id = 'purged:<id>'` (the identity check constraint needs one) | `purged_at`, `purged_had_phone` |
+
+Kept: statuses, timestamps, attempt counts, error code/category/title, body hashes, item
+results and the other aggregates. `ops:report` gives the same counts before and after
+(`customers_without_phone` reads `purged_had_phone` for purged customers).
+
+Skipped and reported, never silently lost (unless `FORCE=yes`): deliveries in
+`received`/`processing`/`failed`/`partially_failed` (unapplied items; the body is what a replay
+needs), outbound messages in `pending`/`sending`/`retry_scheduled` (the request about to be
+sent), `failed` (resendable) and `unknown` (waiting for a status that names its
+`wa_message_id`), and customers who have such a message. Without `CONFIRM=yes` the task refuses
+and prints the counts per table; BEFORE may not be in the future. Counts per table are printed.
+The purge is idempotent.
+
+After a purge: a purged delivery refuses replay ("the raw body was purged on <date>") and the
+admin UI hides its Replay button; `Message#resend!`/`#requeue!`/`#override_window_send!` refuse
+a purged message with the reason `purged`; `Order#accept!`/`#reject!` refuse an order whose
+customer was purged (there is no one to notify); a returning person is simply a new customer.
 
 ## 14. Demo simulator (local screenshots and video only)
 

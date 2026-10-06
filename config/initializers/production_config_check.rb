@@ -24,8 +24,11 @@ module ProductionConfigCheck
       problems << "WHATSAPP_ALLOW_UNSIGNED must not be set in production (webhook signatures are mandatory)"
     end
 
-    if env["FAULT_INJECT"].to_s.strip.present? && env["FAULT_INJECTION_ALLOWED"] != "1"
-      problems << "FAULT_INJECT is set without FAULT_INJECTION_ALLOWED=1 (fault injection must be explicitly allowed in production)"
+    # Fault toggles in production live in the database and are switched from the
+    # Health page (FaultInjection); an environment variable would be a deploy-time
+    # toggle that fires for everyone and cannot be switched off without a restart.
+    if env["FAULT_INJECT"].to_s.strip.present?
+      problems << "FAULT_INJECT must not be set in production (use the Fault injection switch on /admin/health, which needs FAULT_INJECTION_ALLOWED=1)"
     end
 
     return if problems.empty?

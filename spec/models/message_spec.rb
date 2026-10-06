@@ -91,8 +91,17 @@ RSpec.describe Message, type: :model do
       expect(message.reload).to have_attributes(status: "delivered", delivered_at: at(2))
     end
 
+    it "catches a retry_scheduled message up to what Meta reported, and drops the retry bookkeeping" do
+      message = create_outbound(status: :retry_scheduled, attempts: 1, next_attempt_at: 1.minute.from_now,
+                                error_category: "transient_platform", error_code: 131_000, error_title: "Busy")
+
+      message.apply_lifecycle!("delivered", at: at(2))
+
+      expect(message.reload).to have_attributes(status: "delivered", delivered_at: at(2), next_attempt_at: nil, error_category: nil, error_code: nil, error_title: nil)
+    end
+
     it "does not resurrect failed, blocked or pending messages" do
-      %i[failed blocked pending retry_scheduled].each do |status|
+      %i[failed blocked pending].each do |status|
         message = create_outbound(status: status)
 
         message.apply_lifecycle!("delivered", at: at(2))

@@ -44,26 +44,41 @@ about a week apart.
 |---|---|---|---|
 | 1 | Normal order | A participant orders from the catalog | real |
 | 2 | Status progression | Natural (sent → delivered → read) | real |
-| 3 | Duplicate webhook | Observed naturally (counted in `ops:report`); plus re-posting one captured, correctly signed delivery body to the endpoint | real (observed) / simulated (re-post) |
-| 4 | Replay | Enable `FAULT_INJECT=processing:order`, a participant orders, the delivery fails, disable, replay from Health → one order | injected failure, real replay |
+| 3 | Duplicate webhook | Observed naturally (counted in `ops:report` `real`); plus `bin/rails ops:repost_delivery ID=<delivery id> CONFIRM=yes`, which re-ingests one stored delivery's exact bytes and signature (not over HTTP) as a new delivery labeled `injected:repost` | real (observed) / simulated (re-post) |
+| 4 | Replay | Switch on `processing:order` (Health → Fault injection), a participant orders, the delivery fails, switch off, replay from Health → one order | injected failure, real replay |
 | 5 | Outbound permanent failure | Amit temporarily rotates to an invalid token for ~10 minutes → `auth_config`; restore; "Resend all failed in auth_config" | real |
-| 6 | Retryable failure | `FAULT_INJECT=send:5xx` for one send → retry_scheduled → succeeds | injected |
-| 7 | Ambiguous send | `FAULT_INJECT=send:read_timeout_after_send` (the real request is sent, the response is discarded) → `unknown` → resolved only if Meta echoes our id or the message id arrives | semi-real |
+| 6 | Retryable failure | Switch on `send:5xx`, trigger one send (every send fails while it is on), switch off before the retry fires → retry_scheduled → succeeds | injected |
+| 7 | Ambiguous send | Switch on `send:read_timeout_after_send` for one send (the real request is sent, the response is discarded) → `unknown` → resolved only if Meta echoes our id or the message id arrives | semi-real |
 | 8 | 24h block | A participant stays silent > 24h, then the operator accepts a late order → `blocked`, no call to Meta | real |
 | 9 | Window override experiment | Once, on a blocked message, "Override window (experiment)" → observe what Meta actually does (sync 131047, async failed, or silent 200) | real |
-| 10 | Price drift | `CATALOG_SYNC_ENABLED=false`, change a price locally, participant orders at the old price → `price_mismatch`; re-enable, sync, and time when WhatsApp shows the new price | real |
+| 10 | Price drift | With `CATALOG_SYNC_ENABLED=false` (the deployed default), change a price locally, participant orders at the old price → `price_mismatch`; set it to `"true"` in `config/deploy.yml`, redeploy (when Health shows `sending: 0`), sync, and time when WhatsApp shows the new price | real |
 | 11 | Unknown SKU | Amit adds one item directly in Commerce Manager; participant orders it → `unknown_sku` | real |
 
-Fault injection toggles are environment variables read at runtime, logged on every
-use, and must be off outside a scenario. Every injected event is labeled in the log
-(`fault.injected`) and on the affected record ("injected" / `[injected]`), and the Health
-page shows a red banner while any toggle is active. In production they only work with
-`FAULT_INJECTION_ALLOWED=1`; the app refuses to boot with `FAULT_INJECT` set without it.
+Fault injection toggles are switched on the Health page ("Fault injection" panel, visible
+only when `FAULT_INJECTION_ALLOWED=1` was deployed; the operator is recorded). They are read
+from the database on every check, so no redeploy is needed (a redeploy restarts the app and
+turns in-flight sends into `unknown`). **A toggle fires for every matching event for every
+participant while it is on**, so: switch on, run one scenario, switch off. Tell the participant
+before you switch on; never leave a toggle on overnight. Every injected event is labeled in the
+log (`fault.injected`) and on the affected record ("injected" / `[injected]` / `injected_faults`),
+the Health page shows a red banner while any toggle is on, and `ops:report` keeps injected rows
+out of its `real` numbers. In production they work only with `FAULT_INJECTION_ALLOWED=1`; the
+`FAULT_INJECT` environment variable is not used there and the app refuses to boot with it set.
+Changing `FAULT_INJECTION_ALLOWED`, `CATALOG_SYNC_ENABLED` or `DEMO_MASK_PII` needs a redeploy
+(RUNBOOK section 3): do it when Health shows `sending: 0`.
 
 ## Metrics
 
 `bin/rails ops:report FROM=… TO=… FORMAT=md` produces every metric from the database.
 Medians and ranges only; no percentiles on small samples.
+
+Every section is computed twice. **`real`** counts only rows that show real platform
+behavior: nothing with an injected fault or a re-post (`injected_faults` not empty) and, for
+outbound messages, nothing sent to simulated "Demo Customer" customers. **`all`** counts every
+row. An **`injected`** summary lists how many rows carry each label. Quote `real` in results
+(duplicates, failures, retries, unknowns, error categories); latency comes from real rows only.
+The Markdown output shows `real` first, then `all`, then the injected summary.
+A re-posted delivery therefore never inflates the real duplicate count.
 
 ## Evidence retained (outside the public repo until sanitized)
 
@@ -72,14 +87,32 @@ Medians and ranges only; no percentiles on small samples.
 - Masked admin screenshots per scenario (`DEMO_MASK_PII=1`); phone screenshots from
   participants only with consent; Meta-side screenshots taken by Amit.
 - Sanitized payload samples for any new event shape (run them through
-  `script/sanitize_v1_payloads.rb`-style scrubbing before they enter the repo).
+  `script/sanitize_v1_payloads.rb`-style scrubbing before they enter the repo). The script
+  replaces phone numbers, Meta ids, user ids, names, usernames, free text and order notes
+  (only the empty note and plain greetings survive); re-running it on the archived V1 log
+  reproduces the committed fixtures byte for byte.
 - Git tags `ops-start` and `ops-end` (pushed only with Amit's approval).
 - A final database dump in the private archive.
 
 ## After the period
 
 1. Tag `ops-end`, take the final dump into the private archive.
-2. Purge raw webhook bodies and message payloads older than 30 days after the end date
-   (aggregates and statuses stay): `bin/rails ops:purge_payloads BEFORE=YYYY-MM-DD CONFIRM=yes`.
-   Purged deliveries can no longer be replayed.
+2. Purge personal data for everything before the purge date (30 days after the end date),
+   keeping the aggregates: `bin/rails ops:purge BEFORE=YYYY-MM-DD CONFIRM=yes` (without
+   `CONFIRM=yes` it only prints what it would do; `ops:purge_payloads` is the old name).
+   It removes:
+   - `webhook_deliveries`: the raw body, and the Meta message ids in the item results
+     (replaced by a fingerprint);
+   - `messages`: text body, payload, Meta message id and error details;
+   - `orders`: the order note;
+   - `customers` whose last activity is before the date: name and phone number (the user id
+     becomes `purged:<id>`).
+
+   It keeps statuses, timestamps, counts, error codes/categories, body hashes and item
+   results, so `ops:report` gives the same numbers afterwards. It does **not** purge work still
+   in use, and says so: deliveries `received`/`processing`/`failed`/`partially_failed`,
+   outbound messages `pending`/`sending`/`retry_scheduled`/`failed`/`unknown`, and customers
+   with such a message. Resolve or replay those first (the daily check), or add `FORCE=yes`
+   to purge them anyway (then they can never be replayed or resent). Purged deliveries cannot
+   be replayed; purged messages cannot be resent.
 3. Write results only from `ops:report` and the scenario log.

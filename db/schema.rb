@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_000024) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_000026) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -54,6 +54,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_000024) do
     t.datetime "updated_at", null: false
     t.string "whatsapp_number"
     t.string "wa_user_id"
+    t.datetime "purged_at"
+    t.boolean "purged_had_phone"
     t.index ["wa_user_id"], name: "index_customers_on_wa_user_id", unique: true, where: "(wa_user_id IS NOT NULL)"
     t.index ["whatsapp_number"], name: "index_customers_on_whatsapp_number", unique: true, where: "(whatsapp_number IS NOT NULL)"
     t.check_constraint "whatsapp_number IS NOT NULL OR wa_user_id IS NOT NULL", name: "customers_identity_present"
@@ -89,12 +91,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_000024) do
     t.string "guard_override_by"
     t.datetime "unknown_at"
     t.string "injected_faults", default: [], null: false, array: true
+    t.datetime "purged_at"
     t.index ["conversation_id"], name: "index_messages_on_conversation_id"
     t.index ["direction", "status", "accepted_at"], name: "index_messages_on_direction_and_status_and_accepted_at"
     t.index ["idempotency_key"], name: "index_messages_on_idempotency_key", unique: true, where: "(idempotency_key IS NOT NULL)"
     t.index ["order_id"], name: "index_messages_on_order_id"
     t.index ["wa_message_id"], name: "index_messages_on_wa_message_id", unique: true, where: "(wa_message_id IS NOT NULL)"
     t.index ["webhook_delivery_id"], name: "index_messages_on_webhook_delivery_id"
+  end
+
+  create_table "ops_settings", force: :cascade do |t|
+    t.string "fault_inject", default: [], null: false, array: true
+    t.string "updated_by"
+    t.datetime "updated_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
+    t.check_constraint "id = 1", name: "ops_settings_single_row"
   end
 
   create_table "order_items", force: :cascade do |t|

@@ -12,9 +12,11 @@
 # the same limit in kamal-proxy, so normally this is the second line.
 class WebhookGuard
   MAX_BODY_BYTES = 3 * 1024 * 1024
-  # The route also answers with a trailing slash, a format suffix and doubled
-  # slashes, so match what the router would.
-  PATH = %r{\A/webhooks/whatsapp(?:/|\.[^/]*)?\z}
+  # Journey normalises the path before routing (doubled and trailing slashes
+  # vanish), so the guard must too, or `/webhooks/whatsapp.json/` would skip
+  # it. The route itself takes no format (config/routes.rb), but the guard
+  # still ignores any ".ext" suffix, in depth.
+  PATH = %r{\A/webhooks/whatsapp(?:\.[^/]*)?\z}
   SIGNATURE_ENV_KEY = "HTTP_X_HUB_SIGNATURE_256".freeze
   READ_CHUNK_BYTES = 64 * 1024
 
@@ -38,7 +40,12 @@ class WebhookGuard
   private
 
   def guarded?(env)
-    env["REQUEST_METHOD"] == "POST" && PATH.match?(env["PATH_INFO"].to_s.squeeze("/"))
+    env["REQUEST_METHOD"] == "POST" && PATH.match?(normalized_path(env))
+  end
+
+  def normalized_path(env)
+    path = env["PATH_INFO"].to_s.squeeze("/")
+    path.length > 1 ? path.chomp("/") : path
   end
 
   def unsigned?(env)

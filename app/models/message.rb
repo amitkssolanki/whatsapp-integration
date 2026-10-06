@@ -28,7 +28,10 @@ class Message < ApplicationRecord
   ALLOWED_TRANSITIONS = {
     "pending" => %w[sending blocked],
     "sending" => %w[accepted retry_scheduled failed unknown blocked],
-    "retry_scheduled" => %w[sending blocked],
+    # A status webhook (found by our opaque id) can prove that a send we judged
+    # retryable (5xx, 131000) was in fact processed: catch up to what Meta
+    # reported instead of sending a second copy. See #catch_up_lifecycle!.
+    "retry_scheduled" => %w[sending blocked sent delivered read failed],
     "accepted" => %w[sent delivered read failed],
     "sent" => %w[delivered read failed],
     "delivered" => %w[read],
@@ -44,8 +47,17 @@ class Message < ApplicationRecord
   # `blocked -> pending` additionally requires the 24h window to be open. That
   # check spans tables, so #requeue! enforces it (and #override_window_send!
   # deliberately sidesteps it), not the state machine.
+  #
+  # `retry_scheduled -> sending` (the retry's claim) additionally requires that
+  # Meta has not already reported on the message: a wa_message_id or a sent /
+  # delivered / read timestamp is proof an earlier attempt arrived, and sending
+  # again would deliver a second copy. The condition sits in the claim's UPDATE
+  # so a status webhook cannot slip in between a check and the claim.
+  NO_DELIVERY_EVIDENCE = { wa_message_id: nil, sent_at: nil, delivered_at: nil, read_at: nil }.freeze
+
   TRANSITION_GUARDS = {
-    %w[failed pending] => { error_category: RESENDABLE_ERROR_CATEGORIES }
+    %w[failed pending] => { error_category: RESENDABLE_ERROR_CATEGORIES },
+    %w[retry_scheduled sending] => NO_DELIVERY_EVIDENCE
   }.freeze
 
   # Delivery lifecycle as reported by Meta, in forward order, and the column
@@ -127,24 +139,34 @@ class Message < ApplicationRecord
     accepted_at: nil, sent_at: nil, delivered_at: nil, read_at: nil
   }.freeze
 
+  # Ops::Purge removed this message's text, payload and Meta id; there is nothing
+  # left to send, so the operator actions refuse it.
+  PURGED_REASON = "purged".freeze
+
+  def purged? = purged_at.present?
+
   # Operator actions (docs/v2/DESIGN.md §3). They only write the row and enqueue
   # the job; they never call Meta. Each returns an ActionResult.
 
   # failed -> pending, for categories a human can fix (config, exhausted retries).
   def resend!(by:)
     require_actor!(by)
+    return ActionResult.refused(PURGED_REASON) if purged?
     return ActionResult.refused("only a failed message can be resent (it is #{status})") unless failed?
     unless RESENDABLE_ERROR_CATEGORIES.include?(error_category)
       return ActionResult.refused("a #{error_category || 'uncategorised'} failure cannot be resent: it would fail the same way")
     end
 
     previous = error_category
-    start_over!(:pending, "message.resend", by: by, previous_category: previous, wa_message_id: nil)
+    # An override (override_window_send!) covered one attempt only: a resend
+    # must be confirmed again, so it never carries the old override along.
+    start_over!(:pending, "message.resend", by: by, previous_category: previous, wa_message_id: nil, guard_override_by: nil)
   end
 
   # blocked -> pending, only while the 24h window is open now.
   def requeue!(by:)
     require_actor!(by)
+    return ActionResult.refused(PURGED_REASON) if purged?
     return ActionResult.refused("only a blocked message can be requeued (it is #{status})") unless blocked?
     return ActionResult.refused("the 24-hour window is closed; wait for the customer to write again") unless conversation.reload.window_open?
 
@@ -156,6 +178,7 @@ class Message < ApplicationRecord
   # find out. Logged loudly here and again when the job honours it.
   def override_window_send!(by:)
     require_actor!(by)
+    return ActionResult.refused(PURGED_REASON) if purged?
     return ActionResult.refused("only a blocked message can be overridden (it is #{status})") unless blocked?
 
     AppLog.warn("window.override_requested", message_id: id, by: by)
@@ -182,19 +205,28 @@ class Message < ApplicationRecord
                                        last_inbound_at: conversation.last_inbound_at&.iso8601)
   end
 
-  private
+  # True when Meta has already told us something about this message: its id, or
+  # a sent / delivered / read timestamp.
+  def delivery_evidence?
+    wa_message_id.present? || %w[sent delivered read].any? { |step| self[LIFECYCLE_COLUMNS.fetch(step)] }
+  end
 
   # Moves forward to the furthest lifecycle step that has a timestamp, if that is
   # progress. Never while `sending` (the sender has not recorded its outcome yet)
-  # and never backwards. Returns true when the state moved.
+  # and never backwards. Leaving `retry_scheduled` this way also drops the retry
+  # bookkeeping: the attempt that "failed" evidently arrived. Returns true when
+  # the state moved.
   def catch_up_lifecycle!
     return false if sending?
 
     target = LIFECYCLE.reverse.find { |step| self[LIFECYCLE_COLUMNS.fetch(step)] }
     return false unless target && lifecycle_rank(target) > lifecycle_rank(status)
+    return transition!(target, next_attempt_at: nil, error_code: nil, error_category: nil, error_title: nil, error_details: nil) if retry_scheduled?
 
     transition!(target)
   end
+
+  private
 
   def require_actor!(by)
     raise ArgumentError, "by: is required" if by.blank?
