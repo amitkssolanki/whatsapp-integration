@@ -12,11 +12,35 @@
 <% if fault[:active].any? %>
   <div class="banner banner-bad" role="alert" id="fault-injection">
     <strong>Fault injection is ACTIVE:</strong> <%= fault[:active].map { |kind| tag.code(kind) }.then { |codes| safe_join(codes, ", ") } %>.
-    Failures it causes are deliberate and labeled “injected”; they are not real platform behavior. Remove FAULT_INJECT when the scenario is done.
+    Failures it causes are deliberate and labeled “injected”; they are not real platform behavior. It fires for every matching event, for every participant: switch it off in the panel below when the scenario is done.
   </div>
 <% end %>
 <% if fault[:ignored].any? %>
-  <p class="muted" id="fault-injection-ignored">FAULT_INJECT lists toggles that are ignored here: <%= fault[:ignored].join(", ") %>.</p>
+  <p class="muted" id="fault-injection-ignored">Fault toggles that are set but ignored here: <%= fault[:ignored].join(", ") %>.</p>
+<% end %>
+<% if fault[:allowed] %>
+  <section class="card" id="fault-injection-panel">
+    <h2>Fault injection <span class="muted">(scenario runs only)</span></h2>
+    <p class="muted">Switch on, run one scenario, switch off. A toggle makes every matching event fail, for every participant, until it is off. Every injected failure is labeled and excluded from the “real” numbers in the report.</p>
+    <%= form_with url: admin_fault_injection_path, method: :post do %>
+      <% FaultInjection::KINDS.each do |kind| %>
+        <div>
+          <label>
+            <%= check_box_tag "kinds[]", kind, fault[:stored][:kinds].include?(kind), id: "fault_#{kind.parameterize(separator: '_')}" %>
+            <code><%= kind %></code>
+          </label>
+        </div>
+      <% end %>
+      <label>
+        <%= check_box_tag :confirm, "1", false, id: "fault_confirm" %>
+        I understand this makes real sends or orders fail for every participant while it is on
+      </label>
+      <%= submit_tag "Set", class: "btn btn-warn" %>
+      <% if fault[:stored][:by].present? %>
+        <span class="muted">Last set by <%= fault[:stored][:by] %> <%= ago(fault[:stored][:at]) %>.</span>
+      <% end %>
+    <% end %>
+  </section>
 <% end %>
 
 <% if banner[:active] %>

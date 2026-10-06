@@ -48,5 +48,6 @@ Rails.application.routes.draw do
       post :replay_failed, on: :collection
     end
     resources :products, only: [ :index ]
+    post "fault_injection" => "fault_injection#update", as: :fault_injection
   end
 end

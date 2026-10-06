@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_000025) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_000026) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -98,6 +98,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_000025) do
     t.index ["order_id"], name: "index_messages_on_order_id"
     t.index ["wa_message_id"], name: "index_messages_on_wa_message_id", unique: true, where: "(wa_message_id IS NOT NULL)"
     t.index ["webhook_delivery_id"], name: "index_messages_on_webhook_delivery_id"
+  end
+
+  create_table "ops_settings", force: :cascade do |t|
+    t.string "fault_inject", default: [], null: false, array: true
+    t.string "updated_by"
+    t.datetime "updated_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
+    t.check_constraint "id = 1", name: "ops_settings_single_row"
   end
 
   create_table "order_items", force: :cascade do |t|

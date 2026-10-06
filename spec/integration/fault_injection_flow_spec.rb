@@ -176,4 +176,66 @@ RSpec.describe "Fault injection", type: :request do
       expect(response.body).to include("send:nonsense")
     end
   end
+
+  describe "the Health switch" do
+    include_context "admin operator"
+
+    def switch(kinds, confirm: "1") = post("/admin/fault_injection", params: { kinds: kinds, confirm: confirm }.compact)
+
+    it "shows the panel where injection is allowed, with a checkbox per kind and a confirm box" do
+      get "/admin/health"
+
+      expect(response.body).to include("fault-injection-panel", "Fault injection")
+      FaultInjection::KINDS.each { |kind| expect(response.body).to include(%(value="#{kind}")) }
+      expect(response.body).to include('name="confirm"')
+    end
+
+    it "does not show the panel, and refuses the switch, where injection is not allowed" do
+      allow(Rails.env).to receive(:local?).and_return(false)
+      allow(Rails.env).to receive(:production?).and_return(true)
+
+      get "/admin/health"
+      expect(response.body).not_to include("fault-injection-panel")
+
+      switch(%w[send:5xx])
+      expect(OpsSetting.current.fault_inject).to eq([])
+      expect(flash[:alert]).to match(/not allowed/)
+    end
+
+    it "switches toggles on as the operator, shows the red banner, and switches them off again without a confirm" do
+      switch(%w[send:5xx processing:order])
+
+      expect(OpsSetting.current).to have_attributes(fault_inject: %w[send:5xx processing:order], updated_by: "operator")
+      get "/admin/health"
+      expect(response.body).to include("Fault injection is ACTIVE", "<code>send:5xx</code>", "<code>processing:order</code>")
+
+      switch([], confirm: nil)
+
+      expect(OpsSetting.current.fault_inject).to eq([])
+      get "/admin/health"
+      expect(response.body).not_to include("Fault injection is ACTIVE")
+    end
+
+    it "needs the confirm box to switch something on, and ignores unknown kinds" do
+      switch(%w[send:5xx], confirm: nil)
+      expect(OpsSetting.current.fault_inject).to eq([])
+
+      switch(%w[send:5xx send:explode])
+      expect(OpsSetting.current.fault_inject).to eq(%w[send:5xx])
+    end
+
+    it "makes a toggle fire on the next send and stop on the next, with no restart" do
+      switch(%w[send:5xx])
+      first = outbound_ready
+      graph.reply(200, ok_send)
+      send_job(first)
+      expect(first.reload).to be_retry_scheduled
+      expect(graph.calls).to eq(0)
+
+      switch([], confirm: nil)
+      second = outbound_ready
+      send_job(second)
+      expect(second.reload).to be_accepted
+    end
+  end
 end

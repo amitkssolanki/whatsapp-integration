@@ -9,7 +9,8 @@ module Health
   #   orders:       needs_review (undecided orders flagged by validation)
   #   anomalies:    deliveries in the last `window` whose outcome has orphan or anomaly items
   #   queue:        Solid Queue failed executions
-  #   fault_injection: toggles that are active (and any that are set but ignored), see FaultInjection
+  #   fault_injection: whether injection is allowed here, the toggles that are active (and any set but
+  #                 ignored) and who last stored them, see FaultInjection
   #   config_banner: active when every failure in the last hour is an auth_config/account_config one
   #
   # Rejected signatures cannot be counted from the database (rejected requests are
@@ -33,11 +34,15 @@ module Health
         anomalies: anomalies,
         queue: { failed_executions: failed_executions },
         config_banner: config_banner,
-        fault_injection: { active: FaultInjection.active, ignored: FaultInjection.ignored }
+        fault_injection: fault_injection
       }
     end
 
     private
+
+    def fault_injection
+      { allowed: FaultInjection.allowed?, active: FaultInjection.active, ignored: FaultInjection.ignored, stored: FaultInjection.stored_state }
+    end
 
     def deliveries
       since = @now - @window

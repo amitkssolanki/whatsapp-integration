@@ -305,7 +305,7 @@ numbers), phone numbers (mask to last 4), names, or payload bodies.
 
 ## 12. Fault injection (operating-period scenarios 4, 6, 7)
 
-`FaultInjection` reads `FAULT_INJECT` (comma-separated) on every check:
+`FaultInjection` reads the stored toggles on every check (see below):
 
 | toggle | effect |
 |---|---|
@@ -313,10 +313,23 @@ numbers), phone numbers (mask to last 4), names, or payload bodies.
 | `send:5xx` | `WhatsappClient` returns a synthetic 503 (`transient_platform`, retryable) without calling Meta. The message's `error_details` starts with `[injected]`. |
 | `send:read_timeout_after_send` | the real request is made, the response is discarded and the ambiguous result returned, so the message becomes `unknown`. `error_details` starts with `[injected]`. |
 
-Only honoured when `Rails.env.local?`, or in production with `FAULT_INJECTION_ALLOWED=1`;
-production refuses to boot with `FAULT_INJECT` set but not allowed. A toggle fires for
-every matching event while set; every firing logs `fault.injected` (warn) with the kind.
-The Health page shows a red banner listing the active toggles.
+Two gates, both needed. (1) The environment allows it: `Rails.env.local?`, or in production
+`FAULT_INJECTION_ALLOWED=1` (set in `config/deploy.yml` `env.clear`, default `"0"`; changing it is a
+redeploy). (2) The toggle is on. Toggles live in the single-row `ops_settings` table
+(`fault_inject` string[] default `[]`, `updated_by`, `updated_at`), switched on the Health page
+"Fault injection" panel (shown only where allowed; checkboxes for the three kinds, a confirm box
+required to switch something ON, POST `/admin/fault_injection`, stores the operator as
+`updated_by` and logs `fault.toggled`). Because the switch is a database write, a scenario run needs
+no redeploy (a redeploy restarts Puma and the in-process Solid Queue, turning in-flight sends
+into `unknown`). In development and test the `FAULT_INJECT` environment variable (comma-separated)
+is read as an additional source; in production it is ignored and the app refuses to boot with it
+set at all (`ProductionConfigCheck`). Stored toggles that are not allowed here, or not a known
+kind, show on Health as "set but ignored".
+
+A toggle fires for EVERY matching event while it is on, for every participant, so the procedure is:
+switch on, run one scenario, switch off. Every firing logs `fault.injected` (warn) with the kind
+and is labeled on the row (`injected_faults`). The Health page
+shows a red banner listing the active toggles.
 
 ## 13. Purge after the operating period
 

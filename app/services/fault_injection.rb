@@ -1,26 +1,35 @@
 # Deliberate, labeled failures for the operating-period scenarios
 # (docs/operating/PROTOCOL.md 4, 6, 7).
 #
-#   FAULT_INJECT=processing:order,send:5xx bin/rails server
+# Two gates, both required:
 #
-# Toggles are read from the environment on every check, so they can be
-# switched off without code changes. They are only honoured in development and
-# test, or in production when FAULT_INJECTION_ALLOWED=1 (and production refuses
-# to boot with FAULT_INJECT set but not allowed: ProductionConfigCheck).
+#   1. The environment allows it at all: `Rails.env.local?`, or production with
+#      FAULT_INJECTION_ALLOWED=1 (a deploy-time decision; see config/deploy.yml).
+#   2. A toggle is switched on. The toggles live in the database (OpsSetting,
+#      switched from the Health page, recording who did it) so a scenario run
+#      needs no redeploy: a redeploy restarts Puma and the in-process queue and
+#      would turn in-flight sends into `unknown`. In development and test the
+#      FAULT_INJECT environment variable (comma-separated) is read as an
+#      additional source, which keeps local tooling and specs simple. In
+#      production FAULT_INJECT must not be set at all (ProductionConfigCheck).
 #
-# A toggle fires for every matching event while it is set. Every firing is
-# labeled: an `AppLog.warn("fault.injected")` event, and the affected row carries
-# the label (INJECTED_PREFIX in message error details, "injected:<kind>" in the
-# delivery's item outcome), so injected evidence is never mistaken for real.
+# A toggle fires for EVERY matching event while it is on, for every participant:
+# switch it on, run one scenario, switch it off. Every firing is labeled: an
+# `AppLog.warn("fault.injected")` event, and the affected row carries the label
+# (INJECTED_PREFIX in message error details, "injected:<kind>" in the delivery's
+# item outcome and in the append-only injected_faults column), so injected
+# evidence is never mistaken for real.
 module FaultInjection
   class Injected < StandardError; end
+  class NotAllowed < StandardError; end
 
   KINDS = %w[processing:order send:5xx send:read_timeout_after_send].freeze
   INJECTED_PREFIX = "[injected]".freeze
 
-  # The toggles that are set, whether or not they are known or allowed.
+  # The toggles that are set, whether or not they are known or allowed:
+  # stored ones, plus FAULT_INJECT in development and test.
   def self.requested(env = ENV)
-    env["FAULT_INJECT"].to_s.split(",").map(&:strip).reject(&:empty?).uniq
+    (stored + (Rails.env.local? ? parse(env["FAULT_INJECT"]) : [])).uniq
   end
 
   def self.allowed?(env = ENV)
@@ -40,6 +49,38 @@ module FaultInjection
   def self.active?(kind, env = ENV)
     active(env).include?(kind)
   end
+
+  # What the operator last stored: { kinds:, by:, at: }.
+  def self.stored_state
+    setting = OpsSetting.current
+    { kinds: setting.fault_inject, by: setting.updated_by, at: setting.updated_at }
+  end
+
+  # Replaces the stored toggles (the admin switch). Raises NotAllowed where
+  # injection is not allowed and ArgumentError for an unknown kind.
+  def self.set!(kinds, by:, env: ENV)
+    raise NotAllowed, "fault injection is not allowed in this environment" unless allowed?(env)
+    raise ArgumentError, "by: is required" if by.blank?
+
+    kinds = Array(kinds).map(&:to_s).reject(&:empty?).uniq
+    unknown = kinds - KINDS
+    raise ArgumentError, "unknown fault kind: #{unknown.join(', ')}" if unknown.any?
+
+    previous = stored
+    OpsSetting.current.update!(fault_inject: kinds, updated_by: by, updated_at: Time.current)
+    AppLog.warn("fault.toggled", by: by, kinds: kinds.join(","), previous: previous.join(","))
+    kinds
+  end
+
+  def self.stored
+    OpsSetting.current.fault_inject
+  end
+  private_class_method :stored
+
+  def self.parse(text)
+    text.to_s.split(",").map(&:strip).reject(&:empty?).uniq
+  end
+  private_class_method :parse
 
   # Logs one firing and appends it to the affected row's injected_faults, a
   # column nothing ever clears (a successful retry wipes error details and a

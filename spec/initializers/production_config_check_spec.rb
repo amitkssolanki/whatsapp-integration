@@ -47,16 +47,16 @@ RSpec.describe ProductionConfigCheck do
   end
 
   describe "fault injection" do
-    it "refuses FAULT_INJECT without FAULT_INJECTION_ALLOWED=1" do
+    it "refuses FAULT_INJECT in production whatever else is set: toggles live in the database there" do
       expect { described_class.call(valid_env.merge("FAULT_INJECT" => "send:5xx")) }
-        .to raise_error(ProductionConfigCheck::Error, /FAULT_INJECT is set without FAULT_INJECTION_ALLOWED=1/)
-      expect { described_class.call(valid_env.merge("FAULT_INJECT" => "send:5xx", "FAULT_INJECTION_ALLOWED" => "yes")) }
-        .to raise_error(ProductionConfigCheck::Error, /FAULT_INJECT/)
+        .to raise_error(ProductionConfigCheck::Error, /FAULT_INJECT must not be set in production/)
+      expect { described_class.call(valid_env.merge("FAULT_INJECT" => "send:5xx", "FAULT_INJECTION_ALLOWED" => "1")) }
+        .to raise_error(ProductionConfigCheck::Error, /FAULT_INJECT must not be set/)
     end
 
-    it "boots with the explicit allowance, or with FAULT_INJECT unset or blank" do
-      expect { described_class.call(valid_env.merge("FAULT_INJECT" => "send:5xx", "FAULT_INJECTION_ALLOWED" => "1")) }.not_to raise_error
+    it "boots with FAULT_INJECT unset or blank, with or without the allowance" do
       expect { described_class.call(valid_env.merge("FAULT_INJECT" => "  ")) }.not_to raise_error
+      expect { described_class.call(valid_env.merge("FAULT_INJECTION_ALLOWED" => "1")) }.not_to raise_error
       expect { described_class.call(valid_env) }.not_to raise_error
     end
   end

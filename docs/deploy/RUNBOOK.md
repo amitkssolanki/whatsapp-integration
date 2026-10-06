@@ -113,6 +113,22 @@ corrupted data, restore a backup (section 4).
    (change it in Meta first, deploy immediately: signed webhooks fail until both match and are
    retried by Meta) and `WHATSAPP_VERIFY_TOKEN` (change in Meta's webhook config too).
 
+### Switches: which need a redeploy, which do not
+
+| Switch | Where | Changing it |
+|---|---|---|
+| `FAULT_INJECTION_ALLOWED` (default `"0"`) | `env.clear` in `config/deploy.yml` | edit, then redeploy |
+| `CATALOG_SYNC_ENABLED` (default `"false"`) | `env.clear` | edit, then redeploy |
+| `DEMO_MASK_PII` (default `"0"`) | `env.clear` | edit, then redeploy |
+| the fault toggles themselves (`processing:order`, `send:5xx`, `send:read_timeout_after_send`) | "Fault injection" panel on `/admin/health`, shown only when `FAULT_INJECTION_ALLOWED=1` | tick, confirm, Set: takes effect immediately, no redeploy; recorded with the operator's name |
+
+A redeploy restarts Puma and the Solid Queue that runs inside it, so any send in flight at
+that moment ends as `unknown`. Deploy when `/admin/health` shows `sending: 0` under outbound
+messages, and never during a scenario run. `FAULT_INJECT` must not be set in the container
+environment in production: the app refuses to boot with it (use the Health switch).
+A toggle fires for every matching event for every participant: switch on, run one scenario,
+switch off. Turn `FAULT_INJECTION_ALLOWED` back to `"0"` (redeploy) after the last scenario.
+
 ### Uptime monitor
 
 UptimeRobot or Better Stack: HTTPS monitor on `https://HOST/up`, 1-5 minute interval, alert to

@@ -45,20 +45,27 @@ about a week apart.
 | 1 | Normal order | A participant orders from the catalog | real |
 | 2 | Status progression | Natural (sent → delivered → read) | real |
 | 3 | Duplicate webhook | Observed naturally (counted in `ops:report`); plus re-posting one captured, correctly signed delivery body to the endpoint | real (observed) / simulated (re-post) |
-| 4 | Replay | Enable `FAULT_INJECT=processing:order`, a participant orders, the delivery fails, disable, replay from Health → one order | injected failure, real replay |
+| 4 | Replay | Switch on `processing:order` (Health → Fault injection), a participant orders, the delivery fails, switch off, replay from Health → one order | injected failure, real replay |
 | 5 | Outbound permanent failure | Amit temporarily rotates to an invalid token for ~10 minutes → `auth_config`; restore; "Resend all failed in auth_config" | real |
-| 6 | Retryable failure | `FAULT_INJECT=send:5xx` for one send → retry_scheduled → succeeds | injected |
-| 7 | Ambiguous send | `FAULT_INJECT=send:read_timeout_after_send` (the real request is sent, the response is discarded) → `unknown` → resolved only if Meta echoes our id or the message id arrives | semi-real |
+| 6 | Retryable failure | Switch on `send:5xx`, trigger one send (every send fails while it is on), switch off before the retry fires → retry_scheduled → succeeds | injected |
+| 7 | Ambiguous send | Switch on `send:read_timeout_after_send` for one send (the real request is sent, the response is discarded) → `unknown` → resolved only if Meta echoes our id or the message id arrives | semi-real |
 | 8 | 24h block | A participant stays silent > 24h, then the operator accepts a late order → `blocked`, no call to Meta | real |
 | 9 | Window override experiment | Once, on a blocked message, "Override window (experiment)" → observe what Meta actually does (sync 131047, async failed, or silent 200) | real |
-| 10 | Price drift | `CATALOG_SYNC_ENABLED=false`, change a price locally, participant orders at the old price → `price_mismatch`; re-enable, sync, and time when WhatsApp shows the new price | real |
+| 10 | Price drift | With `CATALOG_SYNC_ENABLED=false` (the deployed default), change a price locally, participant orders at the old price → `price_mismatch`; set it to `"true"` in `config/deploy.yml`, redeploy (when Health shows `sending: 0`), sync, and time when WhatsApp shows the new price | real |
 | 11 | Unknown SKU | Amit adds one item directly in Commerce Manager; participant orders it → `unknown_sku` | real |
 
-Fault injection toggles are environment variables read at runtime, logged on every
-use, and must be off outside a scenario. Every injected event is labeled in the log
-(`fault.injected`) and on the affected record ("injected" / `[injected]`), and the Health
-page shows a red banner while any toggle is active. In production they only work with
-`FAULT_INJECTION_ALLOWED=1`; the app refuses to boot with `FAULT_INJECT` set without it.
+Fault injection toggles are switched on the Health page ("Fault injection" panel, visible
+only when `FAULT_INJECTION_ALLOWED=1` was deployed; the operator is recorded). They are read
+from the database on every check, so no redeploy is needed (a redeploy restarts the app and
+turns in-flight sends into `unknown`). **A toggle fires for every matching event for every
+participant while it is on**, so: switch on, run one scenario, switch off. Tell the participant
+before you switch on; never leave a toggle on overnight. Every injected event is labeled in the
+log (`fault.injected`) and on the affected record ("injected" / `[injected]` / `injected_faults`),
+the Health page shows a red banner while any toggle is on, and `ops:report` keeps injected rows
+out of its `real` numbers. In production they work only with `FAULT_INJECTION_ALLOWED=1`; the
+`FAULT_INJECT` environment variable is not used there and the app refuses to boot with it set.
+Changing `FAULT_INJECTION_ALLOWED`, `CATALOG_SYNC_ENABLED` or `DEMO_MASK_PII` needs a redeploy
+(RUNBOOK section 3): do it when Health shows `sending: 0`.
 
 ## Metrics
 

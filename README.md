@@ -303,11 +303,15 @@ anomaly, window, catalog and inbound metrics computed only from the database.
 
 Operating tools (`docs/operating/PROTOCOL.md`):
 
-- `FAULT_INJECT=processing:order,send:5xx,send:read_timeout_after_send` makes
-  deliberate, labeled failures for the scenario runs. Honored only in
-  development/test, or in production with `FAULT_INJECTION_ALLOWED=1`
-  (production refuses to boot with the first and not the second). Health shows
-  a red banner while any toggle is set.
+- Fault injection (`processing:order`, `send:5xx`, `send:read_timeout_after_send`) makes
+  deliberate, labeled failures for the scenario runs. The toggles are stored in the
+  database and switched on the Health page ("Fault injection" panel, shown only when
+  allowed; the operator's name is recorded), so no redeploy is needed. Allowed only in
+  development/test, or in production with `FAULT_INJECTION_ALLOWED=1` (a deploy-time
+  setting, default `"0"` in `config/deploy.yml`). In development and test the
+  `FAULT_INJECT` environment variable is an extra source; production refuses to boot with
+  it set. A toggle fires for every matching event until switched off. Health shows a
+  red banner while any toggle is on.
 - `bin/rails demo:simulate` builds a local, clearly simulated dataset for
   screenshots: fake customers ("Demo Customer N", +1 555 010 numbers), signed
   webhooks through the real controller, an in-process fake Graph API. It runs
