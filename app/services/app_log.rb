@@ -21,7 +21,23 @@ module AppLog
     write(:warn, name, fields)
   end
 
+  # Adds fixed fields to every event written inside the block (the demo
+  # simulator tags its whole run with simulated=true). Per thread/fiber, nestable;
+  # fields passed to an event win over the tagged ones.
+  def self.tagged(**fields)
+    previous = context
+    ActiveSupport::IsolatedExecutionState[:app_log_context] = previous.merge(fields)
+    yield
+  ensure
+    ActiveSupport::IsolatedExecutionState[:app_log_context] = previous
+  end
+
+  def self.context
+    ActiveSupport::IsolatedExecutionState[:app_log_context] || {}
+  end
+
   def self.write(level, name, fields)
+    fields = context.merge(fields)
     forbidden = fields.keys & FORBIDDEN_FIELDS
     raise ArgumentError, "AppLog must not log #{forbidden.join(', ')}" if forbidden.any? && !Rails.env.production?
 

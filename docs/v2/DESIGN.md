@@ -318,3 +318,15 @@ created before the date get `raw_payload = {}`, except outbound messages still
 task reports how many were skipped). Without `CONFIRM=yes` the task refuses and prints what
 it would do. BEFORE may not be in the future. A purged delivery refuses replay
 ("the raw body was purged on <date>") and the admin UI hides its Replay button.
+
+## 14. Demo simulator (local screenshots and video only)
+
+`bin/rails demo:simulate` (`Demo::Simulator`) plays a fixed, seeded script through the real
+webhook controller and jobs so the admin UI can be populated for screenshots. It runs only in
+development, never in production, and only against a database whose name contains `_demo`
+(`DATABASE_URL=postgres:///whatsapp_integration_demo bin/rails db:prepare db:seed demo:simulate`).
+`WhatsappClient` is pointed at an in-process Faraday adapter, so no request can leave the
+process whatever token is configured; statuses arrive as correctly signed POSTs (demo app
+secret); jobs run in the foreground. Simulated records are identifiable: customers are
+"Demo Customer N" with fake numbers, every log event of the run carries `simulated=true`,
+webhook bodies carry `"simulated":true` and Meta ids start with `wamid.DEMO`.
