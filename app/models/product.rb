@@ -18,6 +18,12 @@ class Product < ApplicationRecord
   # Ruby, so this scans the table; fine for a restaurant menu.
   scope :catalog_dirty, -> { where(id: unscoped.select(&:catalog_dirty?).map(&:id)) }
 
+  # Debounced push: wait CatalogPushJob::DEBOUNCE, then the job sends every
+  # dirty product at once. Duplicate enqueues from a burst of edits are fine
+  # because the job is idempotent by digest. Deleting a product does not delete
+  # it from Meta (docs/v2/CATALOG.md): mark it out of stock instead.
+  after_commit :enqueue_catalog_push, on: [ :create, :update ]
+
   def catalog_fields
     Catalog::Fields.for(self)
   end
@@ -37,5 +43,14 @@ class Product < ApplicationRecord
 
   def formatted_price
     format("$%.2f", price)
+  end
+
+  private
+
+  def enqueue_catalog_push
+    return unless Rails.application.config.whatsapp.catalog_sync_enabled
+    return if (saved_changes.keys & Catalog::Fields::PRODUCT_ATTRIBUTES).empty?
+
+    CatalogPushJob.set(wait: CatalogPushJob::DEBOUNCE).perform_later
   end
 end

@@ -20,6 +20,7 @@ class CatalogPushJob < ApplicationJob
   MAX_PUSH_ATTEMPTS = 3
   RETRY_WAITS = [ 1.minute, 5.minutes ].freeze
   STATUS_POLL_DELAY = 10.seconds
+  DEBOUNCE = 30.seconds # delay for pushes triggered by product edits
   IN_FLIGHT_WINDOW = 1.hour # ignore runs older than this when de-duplicating
 
   def perform(run_id = nil, full: false, triggered_by: "product_change")
