@@ -1,0 +1,45 @@
+<% content_for :title, "Admin · Deliveries" %>
+<% live_refresh %>
+<h1>Webhook deliveries</h1>
+<p class="muted">Every authenticated POST from Meta, newest first (latest <%= Admin::DeliveriesController::LIST_LIMIT %>). Bodies are stored but never shown.</p>
+
+<div class="tabs">
+  <%= link_to "All (#{@counts.values.sum})", admin_deliveries_path, class: ("current" if @filter == "all") %>
+  <% WebhookDelivery.statuses.each_key do |status| %>
+    <%= link_to "#{status.tr('_', ' ').capitalize} (#{@counts.fetch(status, 0)})", admin_deliveries_path(status: status), class: ("current" if @filter == status) %>
+  <% end %>
+</div>
+
+<% if @counts.slice("failed", "partially_failed").values.sum.positive? %>
+  <%= button_to "Replay all failed (#{@counts.slice('failed', 'partially_failed').values.sum})", replay_failed_admin_deliveries_path, method: :post, class: "btn btn-warn" %>
+<% end %>
+
+<% if @deliveries.empty? %>
+  <p class="muted">No deliveries here.</p>
+<% else %>
+  <table>
+    <thead>
+      <tr><th>#</th><th>Received</th><th>Status</th><th>Items</th><th>Outcome</th><th class="num">Attempts</th><th class="num">Replays</th><th>Last error</th><th></th></tr>
+    </thead>
+    <tbody>
+      <% @deliveries.each do |delivery| %>
+        <tr>
+          <td>#<%= delivery.id %></td>
+          <td class="nowrap"><%= admin_time(delivery.received_at, seconds: true) %></td>
+          <td><%= delivery_status_badge(delivery) %></td>
+          <td><%= item_counts_text(delivery) %></td>
+          <td><%= outcome_summary(delivery) %></td>
+          <td class="num"><%= delivery.attempts %></td>
+          <td class="num"><%= delivery.replay_count %></td>
+          <td><%= delivery.last_error_class %></td>
+          <td class="nowrap">
+            <%= link_to "View →", admin_delivery_path(delivery) %>
+            <% if delivery.replayable? %>
+              <%= button_to "Replay", replay_admin_delivery_path(delivery), method: :post, class: "btn", form_class: "inline" %>
+            <% end %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>

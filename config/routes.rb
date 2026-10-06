@@ -36,6 +36,10 @@ Rails.application.routes.draw do
         post :override_window
       end
     end
+    resources :deliveries, only: [ :index, :show ] do
+      post :replay, on: :member
+      post :replay_failed, on: :collection
+    end
     resources :products, only: [ :index ]
   end
 end

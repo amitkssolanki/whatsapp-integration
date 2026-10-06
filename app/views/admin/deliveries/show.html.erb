@@ -1,0 +1,52 @@
+<% content_for :title, "Admin · Delivery ##{@delivery.id}" %>
+<% live_refresh %>
+<p><%= link_to "← All deliveries", admin_deliveries_path, class: "muted" %></p>
+<h1>Delivery #<%= @delivery.id %> <%= delivery_status_badge(@delivery) %></h1>
+
+<div class="card">
+  <dl class="kv">
+    <dt>Received</dt><dd><%= admin_time(@delivery.received_at, seconds: true) %></dd>
+    <dt>Status</dt><dd><%= @delivery.status.tr("_", " ") %></dd>
+    <dt>Items</dt><dd><%= item_counts_text(@delivery) %></dd>
+    <dt>Outcome</dt><dd><%= outcome_summary(@delivery) %><% if @delivery.outcome["reason"].present? %> (<%= scrub_ids(@delivery.outcome["reason"]) %>)<% end %></dd>
+    <dt>Attempts</dt><dd><%= @delivery.attempts %><% if @delivery.last_attempted_at %>, last <%= admin_time(@delivery.last_attempted_at, seconds: true) %><% end %></dd>
+    <dt>Processed</dt><dd><%= admin_time(@delivery.processed_at, seconds: true) %></dd>
+    <dt>Replays</dt>
+    <dd>
+      <%= @delivery.replay_count %>
+      <% if @delivery.last_replayed_at %>, last <%= admin_time(@delivery.last_replayed_at, seconds: true) %> by <%= @delivery.last_replayed_by %><% end %>
+    </dd>
+    <dt>Last error</dt>
+    <dd>
+      <% if @delivery.last_error_class.present? || @delivery.last_error_message.present? %>
+        <strong><%= @delivery.last_error_class %></strong> <span class="pre"><%= scrub_ids(@delivery.last_error_message) %></span>
+      <% else %>—<% end %>
+    </dd>
+    <dt>Body fingerprint</dt><dd><code><%= @delivery.body_sha256.first(12) %></code></dd>
+  </dl>
+  <% if @delivery.replayable? %>
+    <p><%= button_to "Replay this delivery", replay_admin_delivery_path(@delivery), method: :post, class: "btn btn-warn" %></p>
+  <% end %>
+</div>
+
+<h2>Item results <span class="count">(<%= Array(@delivery.outcome["items"]).size %>)</span></h2>
+<% if @items.empty? %>
+  <p class="muted">No items were processed.</p>
+<% else %>
+  <table>
+    <thead><tr><th>Kind</th><th>Reference</th><th>Result</th><th>Detail</th></tr></thead>
+    <tbody>
+      <% @items.each do |item| %>
+        <tr>
+          <td><%= item["kind"] %></td>
+          <td><code><%= mask_ref(item["ref"]) %></code></td>
+          <td><%= result_badge(item["result"]) %></td>
+          <td class="pre"><%= scrub_ids(item["detail"]) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+  <% if Array(@delivery.outcome["items"]).size > @items.size %>
+    <p class="muted">Showing the first <%= @items.size %> items.</p>
+  <% end %>
+<% end %>
