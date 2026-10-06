@@ -190,6 +190,10 @@ previous error and lifecycle timestamps cleared.
 | POST, valid, stored and enqueued | 200 | yes, `received` |
 | POST, DB/enqueue failure | 500 (Meta retries) | no |
 
+The route takes no format: `/webhooks/whatsapp.json` is a 404. `WebhookGuard` (413/401 before
+the body is parsed) normalises the path like the router (trailing and doubled slashes, any
+`.ext` suffix), so no spelling of the path skips it.
+
 HTTP status tells Meta whether to retry. The Health page tells the operator what
 failed. Processing failures are never in the HTTP response and never silent.
 

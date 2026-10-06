@@ -17,8 +17,9 @@ Rails.application.routes.draw do
   get "catalog/feed.csv" => "catalog_feeds#show", as: :catalog_feed
 
   namespace :webhooks do
-    get "whatsapp" => "whatsapp#verify"
-    post "whatsapp" => "whatsapp#receive"
+    # No format: `/webhooks/whatsapp.json` is a 404, not a second spelling of the endpoint.
+    get "whatsapp" => "whatsapp#verify", defaults: { format: nil }, format: false
+    post "whatsapp" => "whatsapp#receive", defaults: { format: nil }, format: false
   end
 
   namespace :admin do

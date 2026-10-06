@@ -74,10 +74,18 @@ RSpec.describe WebhookGuard do
     expect(guard.call(env_for(length: 5000, signature: nil)).first).to eq(413)
   end
 
-  it "matches the routes Rails would (trailing slash, format suffix, doubled slash)" do
-    %w[/webhooks/whatsapp/ /webhooks/whatsapp.json //webhooks//whatsapp].each do |path|
+  it "matches the path however it is spelled: trailing slash(es), any format suffix, doubled slashes, in any combination" do
+    %w[/webhooks/whatsapp/ /webhooks/whatsapp// /webhooks/whatsapp.json /webhooks/whatsapp.json/ /webhooks/whatsapp.json// /webhooks/whatsapp.xml/
+       //webhooks//whatsapp //webhooks//whatsapp.json/ /webhooks/whatsapp./].each do |path|
       env = env_for(length: 5000).merge("PATH_INFO" => path)
       expect(guard.call(env).first).to eq(413)
+    end
+  end
+
+  it "does not guard other paths that merely start like the endpoint" do
+    %w[/webhooks /webhooks/ /webhooks/whatsapp/extra /webhooks/whatsapp.json/extra /webhooks/whatsappx].each do |path|
+      env = env_for(length: 5000, signature: nil).merge("PATH_INFO" => path)
+      expect(guard.call(env).first).to eq(200), path
     end
   end
 
@@ -124,6 +132,26 @@ RSpec.describe "WebhookGuard through the app", type: :request do
     post_webhook(meta_fixture("text_greeting"), signature: nil)
 
     expect(response).to have_http_status(:unauthorized)
+  end
+
+  it "answers 413 for an oversized body posted to /webhooks/whatsapp.json/ (review 2 #7), not a skipped guard" do
+    body = "x" * (WebhookGuard::MAX_BODY_BYTES + 1)
+
+    expect { post "/webhooks/whatsapp.json/", params: body, headers: { "Content-Type" => "application/json", "X-Hub-Signature-256" => "sha256=x" } }
+      .not_to change(WebhookDelivery, :count)
+
+    expect(response).to have_http_status(:content_too_large)
+  end
+
+  it "has no format: /webhooks/whatsapp.json is a 404, never a second spelling of the endpoint" do
+    body = meta_fixture("text_greeting")
+
+    expect { post "/webhooks/whatsapp.json", params: body, headers: { "Content-Type" => "application/json", "X-Hub-Signature-256" => sign(body) } }
+      .not_to change(WebhookDelivery, :count)
+
+    expect(response).to have_http_status(:not_found)
+    expect(Rails.application.routes.recognize_path("/webhooks/whatsapp", method: :post)).to include(controller: "webhooks/whatsapp", action: "receive")
+    expect { Rails.application.routes.recognize_path("/webhooks/whatsapp.json", method: :get) }.to raise_error(ActionController::RoutingError)
   end
 
   it "still accepts a normal signed delivery" do
