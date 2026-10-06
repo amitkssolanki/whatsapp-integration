@@ -38,8 +38,8 @@ Evidence is labelled by kind. **Real** is traffic from V1's live run on
 | Live Meta verification of V2 | **Not done** | |
 | Meta cutover, operating period | **Not done** | Protocol drafted in `docs/operating/PROTOCOL.md`; it records nothing yet |
 
-Observed on `main` at the time of writing: `bundle exec rspec` reports 958 examples, 0 failures
-(local PostgreSQL, about 12 seconds). Specs verify the code against the
+Observed on `main` at the time of writing: `bundle exec rspec` reports 1020 examples, 0 failures
+(local PostgreSQL, about 17 seconds). Specs verify the code against the
 fixtures and stubs described above; they say nothing about how Meta behaves.
 
 
@@ -344,8 +344,9 @@ subscription, catalog connection) are performed manually by the account owner;
 no automation in this repository drives them. `script/meta/check_state.rb` is a
 read-only checker (GET requests from a fixed allowlist, no write path).
 [docs/operating/PROTOCOL.md](docs/operating/PROTOCOL.md) defines what may be
-called an operating period and how scenarios are logged; none has happened, and
-some of its scenarios depend on tooling that is not on this branch.
+called an operating period and how scenarios are logged; none has happened. The
+tooling its scenarios need (fault injection switch, `ops:repost_delivery`,
+`ops:report`, `ops:purge`, the demo simulator) is all on `main`.
 
 ## Limitations and non-goals
 
