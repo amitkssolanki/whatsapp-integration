@@ -62,8 +62,16 @@ class WebhookDelivery < ApplicationRecord
     purged_at.present?
   end
 
+  # A synthetic (demo) delivery was never sent by Meta and its signature was
+  # made with a secret that existed only for one run, so it can never be
+  # replayed. The one exception is inside an active Demo::Sandbox, where the
+  # run itself replays its own injected failure.
+  def synthetic_replay_refused?
+    synthetic? && !Demo::Sandbox.active?
+  end
+
   def replayable?
-    REPLAYABLE_STATUSES.include?(status) && !purged?
+    REPLAYABLE_STATUSES.include?(status) && !purged? && !synthetic_replay_refused?
   end
 
   # Operator replay (docs/v2/DESIGN.md §10): re-runs the stored body through the
@@ -75,6 +83,10 @@ class WebhookDelivery < ApplicationRecord
   # secret that has since been rotated away) is never fed back into the app.
   def replay!(by:)
     raise NotReplayable, "the raw body was purged on #{purged_at.to_date.iso8601}, so this delivery can no longer be replayed" if purged?
+    if synthetic_replay_refused?
+      AppLog.event("webhook.replay_refused", delivery_id: id, reason: "synthetic")
+      raise NotReplayable, "a synthetic (demo) delivery cannot be replayed"
+    end
     raise NotReplayable, "a #{status} delivery cannot be replayed" unless replayable?
 
     unless stored_signature_valid?

@@ -10,8 +10,8 @@
   <% end %>
 </div>
 
-<% if @counts.slice("failed", "partially_failed").values.sum.positive? %>
-  <%= button_to "Replay all failed (#{@counts.slice('failed', 'partially_failed').values.sum})", replay_failed_admin_deliveries_path, method: :post, class: "btn btn-warn" %>
+<% if @replayable_count.positive? %>
+  <%= button_to "Replay all failed (#{@replayable_count})", replay_failed_admin_deliveries_path, method: :post, class: "btn btn-warn" %>
 <% end %>
 
 <% if @deliveries.empty? %>

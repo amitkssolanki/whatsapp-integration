@@ -44,4 +44,37 @@ RSpec.describe WebhookDelivery, type: :model do
       expect(delivery.reload).to have_attributes(status: "failed", replay_count: 0)
     end
   end
+
+  describe "a synthetic delivery" do
+    let(:body) { '{"object":"whatsapp_business_account","entry":[]}' }
+    let(:delivery) { create_delivery(status: :failed, body: body, signature_header: sign(body), synthetic: true) }
+
+    it "is not replayable, refuses to replay with reason synthetic, and changes nothing" do
+      log = capture_log do
+        expect(delivery).not_to be_replayable
+        expect { delivery.replay!(by: "operator") }.to raise_error(WebhookDelivery::NotReplayable, /synthetic \(demo\) delivery cannot be replayed/)
+      end
+
+      expect(log).to include("event=webhook.replay_refused", "reason=synthetic")
+      expect(delivery.reload).to have_attributes(status: "failed", replay_count: 0)
+    end
+
+    it "is refused even with a valid stored signature and every other condition met" do
+      expect(delivery.stored_signature_valid?).to be(true)
+      expect(delivery).to be_failed
+      expect { delivery.replay!(by: "operator") }.to raise_error(WebhookDelivery::NotReplayable)
+    end
+
+    it "can be replayed only inside an active Demo::Sandbox, against its own run-local secret" do
+      Demo::Sandbox.run(meta: Demo::FakeMeta.new, queue: Demo::InlineQueue.new) do
+        own = create_delivery(status: :failed, body: body, signature_header: sign(body, Demo::Sandbox::APP_SECRET), synthetic: true)
+
+        expect(own).to be_replayable
+        own.replay!(by: "demo-operator")
+
+        expect(own.reload).to have_attributes(status: "processing", replay_count: 1)
+      end
+      expect(delivery.reload).not_to be_replayable
+    end
+  end
 end

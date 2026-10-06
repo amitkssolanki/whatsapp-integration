@@ -160,6 +160,43 @@ RSpec.describe "Admin deliveries", type: :request do
       expect(replay_jobs).to be_empty
     end
 
+    it "refuses a synthetic delivery with a flash, and does not enqueue anything" do
+      d = delivery(:failed, synthetic: true)
+
+      post "/admin/deliveries/#{d.id}/replay"
+      follow_redirect!
+
+      expect(response.body).to include("Not done:", "synthetic (demo) delivery cannot be replayed")
+      expect(d.reload).to be_failed
+      expect(replay_jobs).to be_empty
+    end
+
+    it "hides Replay for synthetic deliveries, in the list, on the page and in the bulk button" do
+      synthetic = delivery(:failed, synthetic: true)
+
+      get "/admin/deliveries"
+      expect(response.body).not_to include(">Replay<", "Replay all failed", replay_admin_delivery_path(synthetic))
+      expect(response.body).not_to match(/value="Replay"/)
+
+      get "/admin/deliveries/#{synthetic.id}"
+      expect(response.body).not_to include("Replay this delivery")
+
+      real = delivery(:failed)
+      get "/admin/deliveries"
+      expect(response.body).to include("Replay all failed (1)", replay_admin_delivery_path(real))
+    end
+
+    it "skips synthetic deliveries in the bulk replay" do
+      real = delivery(:failed)
+      synthetic = delivery(:partially_failed, synthetic: true)
+
+      post "/admin/deliveries/replay_failed"
+
+      expect(real.reload).to be_processing
+      expect(synthetic.reload).to be_partially_failed
+      expect(replay_jobs.size).to eq(1)
+    end
+
     it "skips purged deliveries in the bulk replay" do
       kept = delivery(:failed)
       purged = delivery(:failed, raw_body: "", purged_at: Time.utc(2026, 12, 2))
