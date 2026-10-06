@@ -23,7 +23,11 @@ module Ops
       {
         period: { from: from.iso8601, to: to.iso8601, generated_at: Time.current.iso8601, git_sha: git_sha },
         deliveries: DeliveriesSection.new(period).call,
-        orders: OrdersSection.new(period).call
+        orders: OrdersSection.new(period).call,
+        outbound: OutboundSection.new(period, at: to).call,
+        latency: LatencySection.new(period).call,
+        status_anomalies: StatusAnomaliesSection.new(period).call,
+        window: WindowSection.new(period).call
       }
     end
 
