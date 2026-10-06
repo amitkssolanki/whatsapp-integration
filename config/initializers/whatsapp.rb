@@ -1,6 +1,11 @@
 Rails.application.config.whatsapp = ActiveSupport::OrderedOptions.new.tap do |c|
   c.token = ENV["WHATSAPP_TOKEN"]
   c.phone_number_id = ENV["WHATSAPP_PHONE_NUMBER_ID"]
+  # The business number as digits with country code (e.g. 15550100000). Optional
+  # and never used for sending (that is phone_number_id); script/meta/check_state.rb
+  # uses it to confirm phone_number_id really belongs to the intended number.
+  # Kept out of tracked files: set it in .env / the deploy secrets file.
+  c.display_phone_number = ENV["WHATSAPP_DISPLAY_PHONE_NUMBER"].to_s.gsub(/\D/, "").presence
   c.business_account_id = ENV["WHATSAPP_BUSINESS_ACCOUNT_ID"]
   c.verify_token = ENV["WHATSAPP_VERIFY_TOKEN"]
   c.app_secret = ENV["WHATSAPP_APP_SECRET"]

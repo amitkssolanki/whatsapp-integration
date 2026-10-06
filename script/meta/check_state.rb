@@ -27,6 +27,13 @@ end
 
 def mask(number) = number.to_s.gsub(/\d(?=\d{4})/, "•")
 
+def digits(number) = number.to_s.gsub(/\D/, "")
+
+# WHATSAPP_DISPLAY_PHONE_NUMBER, when set: the number this project is meant to use.
+EXPECTED_NUMBER = Rails.application.config.whatsapp.display_phone_number
+
+def expected_number?(display) = EXPECTED_NUMBER.present? && digits(display) == EXPECTED_NUMBER
+
 # Every check records a result; a failed request is a failed check. (The first
 # version only recorded checks that succeeded, so a FAIL could still end in
 # "all checks passed".)
@@ -45,6 +52,7 @@ end
 
 token = config.token
 checks = CHECKS
+puts "Expected business number: #{EXPECTED_NUMBER.present? ? mask(EXPECTED_NUMBER) : 'not set (WHATSAPP_DISPLAY_PHONE_NUMBER)'}"
 
 if config.phone_number_id.present?
   status, body = get(config.phone_number_id, { fields: "platform_type,status,code_verification_status,quality_rating,name_status,messaging_limit_tier,display_phone_number,verified_name" }, token)
@@ -53,6 +61,11 @@ if config.phone_number_id.present?
     puts "       quality=#{b['quality_rating']} name_status=#{b['name_status']} tier=#{b['messaging_limit_tier']}"
     puts "       number=#{mask(b['display_phone_number'])} verified_name=#{b['verified_name']}"
     checks << (b["platform_type"] == "CLOUD_API" && b["status"] == "CONNECTED")
+    if EXPECTED_NUMBER.present?
+      matches = expected_number?(b["display_phone_number"])
+      puts "       matches WHATSAPP_DISPLAY_PHONE_NUMBER (#{mask(EXPECTED_NUMBER)}): #{matches}"
+      checks << matches
+    end
   end
 else
   puts "SKIP phone number: WHATSAPP_PHONE_NUMBER_ID not set"
@@ -68,10 +81,15 @@ if config.business_account_id.present?
     puts "       #{numbers.size} number(s)#{numbers.empty? ? ': NONE' : ''}"
     numbers.each do |n|
       configured = n["id"].to_s == config.phone_number_id.to_s ? "  <- WHATSAPP_PHONE_NUMBER_ID" : ""
+      configured += "  <- WHATSAPP_DISPLAY_PHONE_NUMBER" if expected_number?(n["display_phone_number"])
       puts "       id=#{n['id']} number=#{mask(n['display_phone_number'])} platform=#{n['platform_type']} status=#{n['status']} " \
            "verification=#{n['code_verification_status']} quality=#{n['quality_rating']}#{configured}"
     end
     checks << numbers.any? { |n| n["id"].to_s == config.phone_number_id.to_s && n["platform_type"] == "CLOUD_API" }
+    if EXPECTED_NUMBER.present? && numbers.none? { |n| expected_number?(n["display_phone_number"]) }
+      puts "       the expected number (#{mask(EXPECTED_NUMBER)}) is not on this account yet"
+      checks << false
+    end
   end
 
   status, body = get("#{config.business_account_id}/subscribed_apps", {}, token)
