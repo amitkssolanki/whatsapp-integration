@@ -5,7 +5,8 @@ module Admin
     end
 
     def show
-      @conversation = Conversation.includes(:customer, :messages).find(params[:id])
+      @conversation = Conversation.includes(:customer).find(params[:id])
+      @messages = @conversation.messages.chronological
     end
   end
 end

@@ -46,7 +46,7 @@ RSpec.describe "WhatsApp webhook", type: :request do
         post "/webhooks/whatsapp", params: order_payload, headers: { "Content-Type" => "application/json" }
 
         conversation = Customer.find_by(whatsapp_number: "15559998888").conversation
-        expect(conversation.messages.pluck(:direction, :message_type)).to eq([ [ "inbound", "order" ], [ "outbound", "text" ] ])
+        expect(conversation.messages.chronological.pluck(:direction, :message_type)).to eq([ [ "inbound", "order" ], [ "outbound", "text" ] ])
       end
 
       it "responds to a plain text greeting without creating an order" do

@@ -6,10 +6,10 @@
   <p class="muted"><%= @conversation.customer.whatsapp_number %></p>
 
   <div class="card">
-    <% if @conversation.messages.empty? %>
+    <% if @messages.empty? %>
       <p class="muted">No messages yet.</p>
     <% else %>
-      <% @conversation.messages.each do |message| %>
+      <% @messages.each do |message| %>
         <div class="msg-row <%= message.direction %>">
           <div class="msg-meta">
             <%= message.direction == "inbound" ? "← customer" : "→ bot" %>
