@@ -7,14 +7,9 @@ module Webhooks
   # they propagate so the job retries the whole delivery, which is safe
   # because applied items are idempotent.
   class DeliveryProcessor
-    INFRASTRUCTURE_ERRORS = [
-      ActiveRecord::ConnectionNotEstablished,
-      ActiveRecord::Deadlocked,
-      ActiveRecord::LockWaitTimeout,
-      ActiveRecord::StatementTimeout,
-      PG::ConnectionBad,
-      PG::UnableToSend
-    ].freeze
+    # Passed to `rescue` and `retry_on`; see Webhooks::InfrastructureError for
+    # the classes and where they come from.
+    INFRASTRUCTURE_ERRORS = [ Webhooks::InfrastructureError ].freeze
 
     Outcome = Data.define(:results) do
       def summary = results.map(&:result).tally
