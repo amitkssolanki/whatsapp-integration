@@ -12,7 +12,10 @@ RSpec.describe "Webhook logging", type: :request do
     end
   end
 
+  # Request ids and job ids are random UUIDs; a hex segment can be all digits
+  # (e.g. "596608973083"), which is not a phone number. Strip them first.
   def expect_clean(log)
+    log = log.gsub(/\h{8}-\h{4}-\h{4}-\h{4}-\h{12}/, "<uuid>")
     expect(log).not_to match(/\d{10,}/), "a long digit run (phone number or id) was logged"
     expect(log).not_to include("wamid.")
     expect(log).not_to include("Test Customer")
