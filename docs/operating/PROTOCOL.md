@@ -1,5 +1,13 @@
 # Operating period protocol
 
+Related: [PARTICIPANT_GUIDE.md](PARTICIPANT_GUIDE.md) (what participants are told),
+[OPERATOR_CHECKLIST.md](OPERATOR_CHECKLIST.md) (daily check, incidents, rounds, end of period),
+[SCHEDULE.md](SCHEDULE.md) (3-week plan, who acts per scenario), [EVIDENCE.md](EVIDENCE.md)
+(what is kept where, criteria check). Templates: [scenario-log-template.md](scenario-log-template.md),
+[daily-check-log-template.md](daily-check-log-template.md), [incident-template.md](incident-template.md).
+
+**Status:** Verification Session 1 completed 2026-10-06 (owner only). Operating period: not started.
+
 The operating period exists to observe how the real platform behaves against V2's
 assumptions, and to show that V2 records the truth: **zero unexplained differences**
 between what a customer saw on their phone and what the app recorded.
@@ -11,13 +19,16 @@ reported as missing.
 
 | Achieved | Name |
 |---|---|
-| ≥ 14 days deployed on the stable domain, ≥ 2 people besides Amit placing orders, every scenario below run at least twice | **operating period** |
+| ≥ 14 days deployed on the stable domain, ≥ 2 people besides Amit placing orders, every scenario below run at least twice (scenario 9 once by design) | **operating period** |
 | Anything less | **live verification sessions** (report per-session outcomes only; no period metrics, no latency distributions) |
 
 ## Participants and consent
 
 - Only people who agreed in advance, in their own words, to message the demo number.
   Amit contacts them himself; Claude never messages anyone.
+- Meta and Facebook account actions (for example adding a catalog item in Commerce Manager)
+  are performed only by Amit personally in his own browser. Nobody else is asked to touch
+  Meta, and no automated tool operates it.
 - They are told: it is a fictional restaurant, orders are not real, their phone number
   and name are stored on a private server until the purge date, and screenshots/video
   will be masked.
@@ -28,17 +39,20 @@ reported as missing.
 
 ## Daily check (about 15 minutes)
 
-1. Open `/admin/health`. Note anything red in the scenario log (date, what, link).
+1. Open `/admin/health`. Record the day in the daily check log (private copy of
+   `daily-check-log-template.md`); write an incident note for anything red without a cause.
 2. Every failed delivery or message has a known cause, or an incident note.
 3. Undelivered > 10 min and `unknown` messages: explained or noted.
 4. Catalog: last reconcile drift explained.
+
+The Health sections, in page order, and the full checklist are in `OPERATOR_CHECKLIST.md`.
 
 ## Scenarios
 
 Each run is logged in a copy of `docs/operating/scenario-log-template.md` kept in the private evidence archive with: date, scenario, how it
 was induced, **real / simulated / injected**, what the design predicts, what was
 actually observed, links (record ids, screenshot names). Run each at least twice,
-about a week apart.
+about a week apart (scenario 9 once only). SCHEDULE.md says which scenarios run in which round.
 
 | # | Scenario | How it is induced | Label |
 |---|---|---|---|
@@ -46,13 +60,14 @@ about a week apart.
 | 2 | Status progression | Natural (sent → delivered → read) | real |
 | 3 | Duplicate webhook | Observed naturally (counted in `ops:report` `real`); plus `bin/rails ops:repost_delivery ID=<delivery id> CONFIRM=yes`, which re-ingests one stored delivery's exact bytes and signature (not over HTTP) as a new delivery labeled `injected:repost` | real (observed) / simulated (re-post) |
 | 4 | Replay | Switch on `processing:order` (Health → Fault injection), a participant orders, the delivery fails, switch off, replay from Health → one order | injected failure, real replay |
-| 5 | Outbound permanent failure | Amit temporarily rotates to an invalid token for ~10 minutes → `auth_config`; restore; "Resend all failed in auth_config" | real |
+| 5 | Outbound permanent failure | Amit temporarily sets an invalid token for ~10 minutes (edit the private secrets file, `kamal deploy`, about 1 minute restart, only when Health shows nothing sending) → `auth_config`; restore the same way; "Resend all failed in auth_config" | real |
 | 6 | Retryable failure | Switch on `send:5xx`, trigger one send (every send fails while it is on), switch off before the retry fires → retry_scheduled → succeeds | injected |
 | 7 | Ambiguous send | Switch on `send:read_timeout_after_send` for one send (the real request is sent, the response is discarded) → `unknown` → resolved only if Meta echoes our id or the message id arrives | semi-real |
 | 8 | 24h block | A participant stays silent > 24h, then the operator accepts a late order → `blocked`, no call to Meta | real |
 | 9 | Window override experiment | Once, on a blocked message, "Override window (experiment)" → observe what Meta actually does (sync 131047, async failed, or silent 200) | real |
 | 10 | Price drift | With `CATALOG_SYNC_ENABLED=false` (the deployed default), change a price locally, participant orders at the old price → `price_mismatch`; set it to `"true"` in `config/deploy.yml`, redeploy (when Health shows `sending: 0`), sync, and time when WhatsApp shows the new price | real |
-| 11 | Unknown SKU | Amit adds one item directly in Commerce Manager; participant orders it → `unknown_sku` | real |
+| 11 | Unknown SKU | Amit (personally, in Meta) adds one item directly in Commerce Manager; participant orders it → `unknown_sku`; Amit removes it afterwards | real |
+| 12 | Catalog API push | Amit sets `CATALOG_SYNC_ENABLED=true` via redeploy (nothing sending), changes one item's price, waits for the batch to finish, runs reconcile, records the propagation time a participant sees, restores the price and decides whether to keep sync on. Needs Amit's go-ahead at that time because the app then writes to the Meta catalog | real |
 
 Fault injection toggles are switched on the Health page ("Fault injection" panel, visible
 only when `FAULT_INJECTION_ALLOWED=1` was deployed; the operator is recorded). They are read
@@ -62,7 +77,7 @@ participant while it is on**, so: switch on, run one scenario, switch off. Tell 
 before you switch on; never leave a toggle on overnight. Every injected event is labeled in the
 log (`fault.injected`) and on the affected record ("injected" / `[injected]` / `injected_faults`),
 the Health page shows a red banner while any toggle is on, and `ops:report` keeps injected rows
-out of its `real` numbers. In production they work only with `FAULT_INJECTION_ALLOWED=1`; the
+out of its `real` numbers. In production they work only with `FAULT_INJECTION_ALLOWED=1`, which is redeployed on for scenario rounds and back to `"0"` after them; the
 `FAULT_INJECT` environment variable is not used there and the app refuses to boot with it set.
 Changing `FAULT_INJECTION_ALLOWED`, `CATALOG_SYNC_ENABLED` or `DEMO_MASK_PII` needs a redeploy
 (RUNBOOK section 3): do it when Health shows `sending: 0`.
