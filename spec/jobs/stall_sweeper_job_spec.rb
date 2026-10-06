@@ -249,3 +249,12 @@ RSpec.describe StallSweeperJob, type: :job do
     end
   end
 end
+
+RSpec.describe StallSweeperJob, "enqueueing" do
+  # Regression: a private helper named `enqueue` once shadowed
+  # ActiveJob::Base#enqueue, so StallSweeperJob.perform_later raised
+  # NoMethodError (found on the first production deploy).
+  it "can be enqueued like any other job" do
+    expect { described_class.perform_later }.to have_enqueued_job(described_class)
+  end
+end
