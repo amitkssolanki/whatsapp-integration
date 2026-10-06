@@ -150,7 +150,7 @@ unknown, accepted or later.
 | status | lifecycle timestamp column | conditional UPDATE; 0 rows → `duplicate` |
 | outbound decision | `messages.idempotency_key` | `reply:<inbound message id>`, `greeting:<inbound message id>`, `order:<order id>:received`, `order:<order id>:accepted`, `order:<order id>:rejected`; `ON CONFLICT DO NOTHING`; enqueue only for new rows |
 | send execution | status claim pending/retry_scheduled → sending | one worker wins |
-| Meta request | `biz_opaque_callback_data = messages.id` | the Cloud API has no send idempotency key; ambiguous sends become `unknown` and are resolved by the echoed id, never resent |
+| Meta request | Meta's message id (primary); `biz_opaque_callback_data = messages.id` (secondary, best effort) | the Cloud API has no send idempotency key; ambiguous sends become `unknown` and are never resent. They resolve only if Meta echoes our id on a status, which is documented for free-form messages but not for `failed` or explicitly for `catalog_message`; otherwise they stay visibly `unknown` |
 | replay / job retry | all of the above | replay re-runs the stored raw body through the same code |
 
 `<inbound message id>` is our `messages.id`, not Meta's id (Meta ids embed phone numbers).
@@ -181,7 +181,10 @@ credentials. The webhook controller inherits `ActionController::Base` without
 
 Per message item (one transaction):
 1. Insert the inbound message (dedupe on `wa_message_id`).
-2. Upsert customer (by `from`; store `contacts[].user_id` as `wa_user_id`) and conversation;
+2. Upsert customer and conversation. Identity: the business-scoped user id
+   (`contacts[].user_id` / `messages[].from_user_id`) when present, else the phone
+   number (`from`). Either may be missing (Meta omits the phone number for some
+   username users since 2026); a message with neither fails as an item.
    `last_inbound_at = GREATEST(last_inbound_at, wa_timestamp)`.
 3. `order` → build Order + OrderItems + validation issues (§9), then the outbound
    `order:<id>:received` message. `text` greeting → `greeting:<msg id>` catalog card;
@@ -203,33 +206,41 @@ marked failed and is replayable after a fix.
 Faraday: open timeout 3 s, read timeout 10 s. Classification applies equally to a
 sync error response and to `statuses[].errors[]` on a `failed` webhook.
 
-| category | examples | retry | notes |
+Classify by Meta `code` first; HTTP status is only a fallback when there is no code.
+
+| category | codes | retry | notes |
 |---|---|---|---|
-| request_invalid | 100, 131008, 131009, 131021, 131051, other 4xx | no | bug or bad data |
-| recipient_not_allowed | 131030 | no | test-number allowlist |
-| recipient_undeliverable | 131026 | no | |
+| request_invalid | 100, 131008, 131009✓, 131021, 131051, 131053, 135000 | no | bug or bad data |
+| recipient_not_allowed | 131030✓ | no | test-number allow-list (no longer on Meta's page, but received in V1) |
+| recipient_undeliverable | 131026, 131049, 131050, 130472 | no | 131049: wait 24h+ before any resend |
 | window_closed | 131047 | no | template only (Gate C) |
-| auth_config | 190, 10, 200–299, HTTP 401/403 | no; operator resend after fix | banner |
-| account_config | 133010, 133000 | no; operator resend after fix | banner |
-| account_quality | 131048, 368, 131031 | no | stop scenario runs |
-| rate_limited | HTTP 429, 4, 80007, 130429, 131056 | yes, long backoff | honor Retry-After if present |
-| transient_platform | HTTP 5xx, 1, 2, 131000, 131016, 133004 | yes | |
+| auth_config | 0, 190, 10, 200–299, 131005, HTTP 401/403 without a code | no; operator resend after fix | banner |
+| account_config | 133010✓, 133000, 131042, 131045 | no; operator resend after fix | banner; 131042 is billing |
+| account_quality | 131048, 368, 131031, 131064 | no | stop scenario runs |
+| rate_limited | 4, 80007, 130429, 131056, HTTP 429 | yes, long backoff | no Retry-After header exists; 131056 waits 4^attempt seconds |
+| transient_platform | 1, 2, 131000, 131016, 131057, 133004, 2494100, HTTP 5xx | yes | |
 | transient_network | could not connect (open timeout, refused, DNS) | yes | request never left |
-| ambiguous | read timeout, reset after send | **no** → `unknown` | resolved by status webhook |
+| ambiguous | read timeout, connection reset after the request was sent | **no** → `unknown` | resolved only by a correlated status webhook |
 | unclassified | anything else | no | flagged as a taxonomy gap |
+
+✓ = received by V1 (real evidence). Everything else comes from Meta's documentation
+(`docs/v2/meta-research.md`).
 
 Retry schedule (attempt n waits): 30 s, 2 min, 10 min, 30 min, then
 `failed(transient_exhausted)`; rate_limited uses at least 2 min. A retry never sends
-outside the window: the guard turns it into `blocked`. Codes other than the three
-observed in V1 (131009, 131030, 133010) are confirmed against Meta's docs before
-release (see `docs/v2/meta-research.md`).
+outside the window: the guard turns it into `blocked`.
+
+Recipient: `to` = phone number when known, else `recipient` = business-scoped user id
+(supported since July 2026). Graph API version defaults to v26.0 (V1's v21.0 expires
+2027-01-21).
 
 ## 8. 24-hour window
 
 `open = now < last_inbound_at + 24h - 5min`. Checked in SendMessageJob right before
 the HTTP call. Closed → `blocked` (`error_category: window_closed`, `blocked_at`),
-Meta is not called. Meta disagreeing (131047 while we thought open) → `failed`
-plus a `window_disagreement` event. Template fallback only if Gate C passes.
+Meta is not called. Meta disagreeing (131047 while we thought open, whether in the
+HTTP response or in a later `failed` status) → `failed(window_closed)` plus a
+`window_disagreement` event. Template fallback only if Gate C passes.
 
 ## 9. Order validation
 

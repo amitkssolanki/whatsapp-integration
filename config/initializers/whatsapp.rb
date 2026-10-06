@@ -5,7 +5,7 @@ Rails.application.config.whatsapp = ActiveSupport::OrderedOptions.new.tap do |c|
   c.verify_token = ENV["WHATSAPP_VERIFY_TOKEN"]
   c.app_secret = ENV["WHATSAPP_APP_SECRET"]
   c.catalog_id = ENV["CATALOG_ID"]
-  c.api_version = ENV.fetch("WHATSAPP_API_VERSION", "v21.0")
+  c.api_version = ENV.fetch("WHATSAPP_API_VERSION", "v26.0")
 
   # Skip webhook signature checks. Only ever honored in development and test
   # (Whatsapp::Signature); production ignores it.
