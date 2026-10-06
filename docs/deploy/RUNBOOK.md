@@ -50,12 +50,18 @@ source ~/.config/whatsapp-demo/secrets.env
 kamal config | head -20          # sanity check (prints secrets: do not paste it anywhere)
 kamal setup                      # installs Docker, boots proxy + Postgres, builds, pushes, deploys
 curl -i https://HOST/up              # 200
-curl -s "https://HOST/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=$WHATSAPP_VERIFY_TOKEN&hub.challenge=ping"   # ping
+curl -s -o /dev/null -w '%{http_code}\n' "https://HOST/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=ping"   # 403: route is live, bad token refused
 ```
 
 Then, in Meta's dashboard (you): set callback URL `https://HOST/webhooks/whatsapp` and the same
-verify token. First certificate issuance can take a minute; if `/up` fails on TLS, check
-`kamal proxy logs` and that DNS is grey-cloud.
+verify token; Meta's **Verify and save** button is the real handshake test. First certificate
+issuance can take a minute; if `/up` fails on TLS, check `kamal proxy logs` and that DNS is
+grey-cloud.
+
+Do **not** put the real verify token in a `curl` URL (or any command line) to test the handshake:
+the query string ends up in shell history and in kamal-proxy and other access logs. The `wrong`
+placeholder above proves routing and rejection without it. Treat the verify token like a password;
+if it was ever exposed in a log, change it in `secrets.env`, redeploy and update Meta's webhook config.
 
 Install backups (once, on the VPS):
 
