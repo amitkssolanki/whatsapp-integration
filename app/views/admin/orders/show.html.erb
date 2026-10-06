@@ -1,28 +1,82 @@
 <% content_for :title, "Admin · Order ##{@order.id}" %>
-  <p><%= link_to "← All orders", admin_orders_path, class: "muted" %></p>
-  <h1>Order #<%= @order.id %></h1>
-  <p class="muted">
-    <%= @order.customer.display_name.presence || @order.customer.whatsapp_number %>
-    · <%= @order.customer.whatsapp_number %>
-    · placed <%= @order.created_at.strftime("%b %-d, %Y %H:%M") %>
-  </p>
+<% live_refresh unless @order.received? %>
+<p><%= link_to "← All orders", admin_orders_path, class: "muted" %></p>
+<h1>Order #<%= @order.id %> <%= order_status_badge(@order) %> <%= review_badge(@order) %></h1>
+<p class="muted">
+  <%= @conversation ? link_to(display_name(@order.customer), admin_conversation_path(@conversation)) : display_name(@order.customer) %>
+  · <%= display_phone(@order.customer) %>
+  · placed <%= admin_time(@order.created_at) %>
+  <% if @conversation %>· <%= window_badge(@conversation) %><% end %>
+</p>
 
+<% if @order.decided_at %>
+  <p>
+    <%= @order.status.humanize %> by <strong><%= @order.decided_by %></strong> on <%= admin_time(@order.decided_at, seconds: true) %>.
+    <% if @order.rejection_reason.present? %>Reason: <%= scrub_ids(rejection_reason_label(@order.rejection_reason)) %><% end %>
+  </p>
+<% end %>
+
+<% if @order.received? && @conversation && !@conversation.window_open? %>
+  <div class="warning">Customer will not be notified: 24h window closed. A decision is still recorded, but its message will be blocked.</div>
+<% end %>
+
+<div class="card">
+  <table>
+    <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Customer price</th><th class="num">Catalog price</th><th class="num">Line total</th></tr></thead>
+    <tbody>
+      <% @order.order_items.each do |item| %>
+        <% differs = item.catalog_price_cents && item.catalog_price_cents != item.item_price_cents %>
+        <tr class="<%= "diff" if differs %>">
+          <td><%= item.product&.name || "Unknown product" %> <span class="muted"><%= scrub_ids(item.product_retailer_id) %></span></td>
+          <td class="num"><%= item.quantity %></td>
+          <td class="num"><%= cents_to_money(item.item_price_cents) %></td>
+          <td class="num"><%= cents_to_money(item.catalog_price_cents) %><%= " ≠" if differs %></td>
+          <td class="num"><%= cents_to_money(item.line_total_cents) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+  <p class="num" style="margin-top:0.75rem;"><strong>Total (what the customer saw): <%= cents_to_money(@order.total_cents) %></strong></p>
+  <% if @order.wa_order_note.present? %>
+    <p class="muted">Note from customer: “<%= scrub_ids(@order.wa_order_note) %>”</p>
+  <% end %>
+</div>
+
+<% if @order.validation_issues.present? %>
+  <h2>Validation issues</h2>
   <div class="card">
-    <table>
-      <thead><tr><th>Item</th><th>Qty</th><th>Unit price</th><th>Line total</th></tr></thead>
-      <tbody>
-        <% @order.order_items.each do |item| %>
-          <tr>
-            <td><%= item.product&.name || item.product_retailer_id %></td>
-            <td><%= item.quantity %></td>
-            <td><%= number_to_currency(item.item_price) %></td>
-            <td><%= number_to_currency(item.line_total_cents / 100.0) %></td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-    <p style="text-align:right;margin-top:0.75rem;"><strong>Total: <%= @order.formatted_total %></strong></p>
-    <% if @order.wa_order_note.present? %>
-      <p class="muted">Note from customer: “<%= @order.wa_order_note %>”</p>
-    <% end %>
+    <ul>
+      <% @order.validation_issues.each do |issue| %>
+        <li><%= issue_text(issue) %> <code><%= issue["code"] %></code></li>
+      <% end %>
+    </ul>
   </div>
+<% end %>
+
+<% if @order.received? %>
+  <h2>Decision</h2>
+  <div class="actions">
+    <div class="card">
+      <strong>Accept</strong>
+      <p class="muted">Confirms the order and tells the customer the total (<%= cents_to_money(@order.total_cents) %>).</p>
+      <%= button_to "Accept order", accept_admin_order_path(@order), method: :post, class: "btn btn-primary" %>
+    </div>
+    <div class="card">
+      <strong>Reject</strong>
+      <%= form_with url: reject_admin_order_path(@order), method: :post, class: "stack" do |f| %>
+        <div>
+          <%= f.label :reason, "Reason (internal, not sent to the customer)" %>
+          <%= f.select :reason, options_for_select([ [ "Choose a reason…", "" ] ] + Admin::OrdersController::REJECTION_REASONS.map { |code, label| [ label, code ] }), {}, required: true %>
+        </div>
+        <div>
+          <%= f.label :note, "Note (optional)" %>
+          <%= f.text_field :note, maxlength: 200 %>
+        </div>
+        <%= f.submit "Reject order", class: "btn btn-danger" %>
+      <% end %>
+    </div>
+  </div>
+<% end %>
+
+<h2>Customer notifications <span class="count">(<%= @notifications.size %>)</span></h2>
+<%= render "admin/messages/table", messages: @notifications %>

@@ -23,7 +23,12 @@ Rails.application.routes.draw do
 
   namespace :admin do
     resources :conversations, only: [ :index, :show ]
-    resources :orders, only: [ :index, :show ]
+    resources :orders, only: [ :index, :show ] do
+      member do
+        post :accept
+        post :reject
+      end
+    end
     resources :products, only: [ :index ]
   end
 end

@@ -1,0 +1,27 @@
+<% if messages.empty? %>
+  <p class="muted">Nothing queued for this order yet.</p>
+<% else %>
+  <table>
+    <thead>
+      <tr><th>Message</th><th>Purpose</th><th>State</th><th>Queued</th><th>Accepted</th><th>Sent</th><th>Delivered</th><th>Read</th><th>Failed / blocked</th></tr>
+    </thead>
+    <tbody>
+      <% messages.each do |message| %>
+        <tr>
+          <td>#<%= message.id %></td>
+          <td><%= message.purpose.to_s.tr("_", " ") %></td>
+          <td><%= message_state(message) %></td>
+          <td class="nowrap"><%= admin_time(message.created_at, seconds: true) %></td>
+          <td class="nowrap"><%= admin_time(message.accepted_at, seconds: true) %></td>
+          <td class="nowrap"><%= admin_time(message.sent_at, seconds: true) %></td>
+          <td class="nowrap"><%= admin_time(message.delivered_at, seconds: true) %></td>
+          <td class="nowrap"><%= admin_time(message.read_at, seconds: true) %></td>
+          <td class="nowrap"><%= admin_time(message.failed_at || message.blocked_at, seconds: true) %></td>
+        </tr>
+        <% if message.error_details.present? %>
+          <tr><td></td><td colspan="8" class="muted pre"><%= scrub_ids(message.error_details) %></td></tr>
+        <% end %>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>

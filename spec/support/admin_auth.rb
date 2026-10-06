@@ -25,6 +25,10 @@ RSpec.shared_context "admin operator" do
       super(path, **options, headers: admin_headers.merge(options.fetch(:headers, {})))
     end
   end
+
+  def follow_redirect!(headers: {}, **options)
+    super(headers: admin_headers.merge(headers), **options)
+  end
 end
 
 RSpec.configure do |config|
