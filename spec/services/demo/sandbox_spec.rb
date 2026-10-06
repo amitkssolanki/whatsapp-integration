@@ -9,7 +9,7 @@ RSpec.describe Demo::Sandbox do
   it "is not entered, and not active, outside a run" do
     expect(described_class.entered?).to be(false)
     expect(described_class.active?).to be(false)
-    expect { described_class.assert_isolated! }.to raise_error(Demo::SandboxViolation, /not inside/)
+    expect { described_class.assert_isolated! }.to raise_error(Demo::Sandbox::Violation, /not inside/)
   end
 
   it "puts every external dependency of this process on in-process fakes, and restores them afterwards" do
@@ -52,7 +52,7 @@ RSpec.describe Demo::Sandbox do
   end
 
   it "cannot be nested" do
-    sandboxed { expect { sandboxed { } }.to raise_error(Demo::SandboxViolation, /already active/) }
+    sandboxed { expect { sandboxed { } }.to raise_error(Demo::Sandbox::Violation, /already active/) }
 
     expect(described_class).not_to be_entered
   end
@@ -61,25 +61,26 @@ RSpec.describe Demo::Sandbox do
     sandboxed do
       WhatsappClient.adapter = graph.adapter
       expect(described_class).not_to be_active
-      expect { described_class.assert_isolated! }.to raise_error(Demo::SandboxViolation, /WhatsappClient is not on the fake adapter/)
+      expect { described_class.assert_isolated! }.to raise_error(Demo::Sandbox::Violation, /WhatsappClient is not on the fake adapter/)
     end
     sandboxed do
       Catalog::Client.adapter = [ :net_http ]
-      expect { described_class.assert_isolated! }.to raise_error(Demo::SandboxViolation, /Catalog::Client is not on the fake adapter/)
+      expect { described_class.assert_isolated! }.to raise_error(Demo::Sandbox::Violation, /Catalog::Client is not on the fake adapter/)
     end
     sandboxed do
       Rails.application.config.whatsapp.token = "the-real-token"
-      expect { described_class.assert_isolated! }.to raise_error(Demo::SandboxViolation, /token/)
+      expect { described_class.assert_isolated! }.to raise_error(Demo::Sandbox::Violation, /token/)
     end
     sandboxed do
       SendMessageJob.queue_adapter = :async
-      expect { described_class.assert_isolated! }.to raise_error(Demo::SandboxViolation, /SendMessageJob.*in-process queue/)
+      expect { described_class.assert_isolated! }.to raise_error(Demo::Sandbox::Violation, /SendMessageJob.*in-process queue/)
     end
   end
 
   it "blocks Net::HTTP from connecting while entered (nothing is dialled, whatever the adapter)" do
     sandboxed do
-      expect { Net::HTTP.new("graph.facebook.com", 443).start }.to raise_error(Demo::NetworkBlocked)
+      expect { Net::HTTP.new("graph.facebook.com", 443).start }.to raise_error(Demo::Sandbox::NetworkBlocked)
+      expect(described_class.blocked_connections).to eq(1)
     end
   end
 

@@ -1,26 +1,6 @@
 require "net/http"
 
 module Demo
-  # Raised when something that must be isolated is not (a non-fake adapter, a
-  # real credential, a queue that is not the in-process one).
-  class SandboxViolation < StandardError; end
-
-  # Raised when anything tries to open a network connection while a sandbox is
-  # entered.
-  class NetworkBlocked < StandardError; end
-
-  # Belt and braces behind the fake adapters: while a sandbox is entered, Net::HTTP
-  # (what Faraday's default adapter uses) cannot open a connection at all.
-  module NetworkTripwire
-    private
-
-    def connect
-      raise NetworkBlocked, "a network connection was attempted while a demo sandbox is active" if Demo::Sandbox.entered?
-
-      super
-    end
-  end
-
   # A process-local box for synthetic runs (demo:seed_integration). While it is
   # entered, in THIS process only:
   #
@@ -42,6 +22,29 @@ module Demo
   # `active?` re-checks the isolation on every call, so swapping any adapter
   # back mid-run makes those guards refuse again.
   module Sandbox
+    # Raised when something that must be isolated is not (a non-fake adapter, a
+    # real credential, a queue that is not the in-process one).
+    class Violation < StandardError; end
+
+    # Raised when anything tries to open a network connection while a sandbox is
+    # entered.
+    class NetworkBlocked < StandardError; end
+
+    # Belt and braces behind the fake adapters: while a sandbox is entered, Net::HTTP
+    # (what Faraday's default adapter uses) cannot open a connection at all.
+    module NetworkTripwire
+      private
+
+      def connect
+        if Demo::Sandbox.entered?
+          Demo::Sandbox.note_blocked_connection
+          raise NetworkBlocked, "a network connection was attempted while a demo sandbox is active"
+        end
+
+        super
+      end
+    end
+
     FAKE_TOKEN = "sim-token-not-real".freeze
     PHONE_NUMBER_ID = "100000000000999".freeze
     APP_SECRET = "sim-app-secret-not-a-real-secret".freeze
@@ -57,20 +60,28 @@ module Demo
       def meta = @meta
       def queue = @queue
 
-      # Raises SandboxViolation unless every isolation property holds right now.
+      # How many connection attempts the tripwire stopped during this run (0 when nothing tried).
+      def blocked_connections = @blocked_connections.to_i
+
+      def note_blocked_connection
+        @blocked_connections = blocked_connections + 1
+      end
+
+      # Raises Violation unless every isolation property holds right now.
       def assert_isolated!
-        raise SandboxViolation, "not inside Demo::Sandbox.run" unless entered?
-        raise SandboxViolation, "demo sandbox is not isolated: #{problems.join('; ')}" if problems.any?
+        raise Violation, "not inside Demo::Sandbox.run" unless entered?
+        raise Violation, "demo sandbox is not isolated: #{problems.join('; ')}" if problems.any?
 
         true
       end
 
       def run(meta:, queue:)
-        raise SandboxViolation, "a demo sandbox is already active" if entered?
+        raise Violation, "a demo sandbox is already active" if entered?
 
         install_tripwire
         saved = snapshot
         begin
+          @blocked_connections = 0
           @meta = meta
           @queue = queue
           config = Rails.application.config.whatsapp

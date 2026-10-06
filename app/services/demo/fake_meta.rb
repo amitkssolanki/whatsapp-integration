@@ -23,9 +23,9 @@ module Demo
     end
 
     # The next call gets this HTTP error (a Graph-shaped body).
-    def fail_next(status: 503, code: 2, title: "Service Unavailable")
+    def fail_next(status: 503, code: 2, title: "Service Unavailable", details: "simulated by the demo")
       @script << [ :reply, status, { "error" => { "message" => "(##{code}) #{title} (simulated)", "type" => "OAuthException", "code" => code,
-                                                   "error_data" => { "details" => "simulated by the demo" } } } ]
+                                                   "error_data" => { "details" => details } } } ]
       self
     end
 

@@ -1,11 +1,6 @@
 require "openssl"
 
 module Demo
-  # One scenario of a scripted run: what was checked and whether it held.
-  Scenario = Struct.new(:key, :title, :checks, keyword_init: true) do
-    def passed? = checks.all?(&:last)
-  end
-
   # What the scripted demo runs (Demo::Simulator, Demo::IntegrationSeed) share:
   # building the Meta webhook bodies a customer or Meta would send, posting them,
   # correctly signed, to the REAL webhook endpoint in this process, running the
