@@ -98,8 +98,28 @@ RSpec.describe Whatsapp::ErrorClassifier do
       end
     end
 
-    it "treats a TLS handshake failure as transient_network" do
-      expect(described_class.classify_exception(Faraday::SSLError.new(OpenSSL::SSL::SSLError.new("x"))).category).to eq("transient_network")
+    it "treats an SSL error that names a handshake or verification failure as transient_network (no request bytes were sent)" do
+      [
+        "SSL_connect returned=1 errno=0 peeraddr=1.2.3.4:443 state=error: certificate verify failed (unable to get local issuer certificate)",
+        "SSL_connect returned=1 errno=0 state=error: wrong version number",
+        "SSL_connect returned=1 errno=0 state=error: sslv3 alert handshake failure",
+        "SSL_connect returned=1 errno=0 state=error: no protocols available"
+      ].each do |message|
+        error = Faraday::SSLError.new(OpenSSL::SSL::SSLError.new(message))
+        expect(described_class.classify_exception(error)).to have_attributes(category: "transient_network", retryable: true, ambiguous: false), message
+      end
+    end
+
+    it "treats every other SSL error as ambiguous: it may have been raised while reading the response" do
+      [
+        "SSL_read: unexpected eof while reading",
+        "SSL_read: bad record mac",
+        "x",
+        nil
+      ].each do |message|
+        inner = message ? OpenSSL::SSL::SSLError.new(message) : OpenSSL::SSL::SSLError.new
+        expect(described_class.classify_exception(Faraday::SSLError.new(inner))).to have_attributes(category: "ambiguous", retryable: false, ambiguous: true), message.inspect
+      end
     end
 
     it "treats any other Faraday failure after the request was handed over as ambiguous" do

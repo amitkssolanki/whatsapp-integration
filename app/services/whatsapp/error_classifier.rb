@@ -70,7 +70,7 @@ module Whatsapp
     #
     #   Net::OpenTimeout, ECONNREFUSED, SocketError (and the other
     #   NET_HTTP_EXCEPTIONS) -> Faraday::ConnectionFailed, wrapping the original
-    #   OpenSSL::SSL::SSLError                               -> Faraday::SSLError
+    #   OpenSSL::SSL::SSLError (handshake OR mid-response)   -> Faraday::SSLError
     #   Net::ReadTimeout / Net::WriteTimeout (Timeout::Error), ETIMEDOUT
     #                                                        -> Faraday::TimeoutError
     #
@@ -84,12 +84,25 @@ module Whatsapp
         never_sent = NEVER_SENT.any? { |klass| error.wrapped_exception.is_a?(klass) }
         return build(never_sent ? "transient_network" : AMBIGUOUS)
       end
-      return build("transient_network") if error.is_a?(Faraday::SSLError) # handshake failed before any request bytes
+      return build(handshake_failure?(error) ? "transient_network" : AMBIGUOUS) if error.is_a?(Faraday::SSLError)
 
       # TimeoutError (read/write/ETIMEDOUT), NilStatusError, ParsingError, anything
       # else Faraday raises after the request was handed to the socket.
       build(AMBIGUOUS)
     end
+
+    # faraday-net_http maps EVERY OpenSSL::SSL::SSLError to Faraday::SSLError,
+    # wherever it was raised, including while reading the response (OpenSSL 3:
+    # "SSL_read: unexpected eof while reading" when the peer closes mid-response).
+    # Only an error that names a handshake / verification failure proves no
+    # request bytes were sent; every other SSLError is as ambiguous as ECONNRESET.
+    HANDSHAKE_FAILURE = /certificate verify failed|wrong version number|handshake failure|no protocols available/i
+
+    def self.handshake_failure?(error)
+      message = error.wrapped_exception&.message.presence || error.message
+      message.to_s.match?(HANDSHAKE_FAILURE)
+    end
+    private_class_method :handshake_failure?
 
     # Classification for an API error: Meta's `code` (an Integer or numeric
     # string) and, only when there is no code, the HTTP status.

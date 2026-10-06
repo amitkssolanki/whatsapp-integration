@@ -245,8 +245,8 @@ Classify by Meta `code` first; HTTP status is only a fallback when there is no c
 | account_quality | 131048, 368, 131031, 131064 | no | stop scenario runs |
 | rate_limited | 4, 80007, 130429, 131056, HTTP 429 | yes, long backoff | no Retry-After header exists; 131056 waits 4^attempt seconds |
 | transient_platform | 1, 2, 131000, 131016, 131057, 133004, 2494100, HTTP 5xx | yes | |
-| transient_network | could not connect (open timeout, refused, DNS) | yes | request never left |
-| ambiguous | read timeout, connection reset after the request was sent | **no** → `unknown` | resolved only by a correlated status webhook |
+| transient_network | could not connect (open timeout, refused, DNS), or a TLS handshake/verification failure (`certificate verify failed`, `wrong version number`, `handshake failure`, `no protocols available`) | yes | request never left |
+| ambiguous | read timeout, connection reset after the request was sent, any other SSL error (e.g. `SSL_read: unexpected eof`: Faraday raises SSLError for failures while reading the response too) | **no** → `unknown` | resolved only by a correlated status webhook |
 | unclassified | anything else | no | flagged as a taxonomy gap |
 
 ✓ = received by V1 (real evidence). Everything else comes from Meta's documentation
