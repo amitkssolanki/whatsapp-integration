@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_000003) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_000010) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -52,9 +52,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_000003) do
     t.string "display_name"
     t.boolean "opted_in", default: true, null: false
     t.datetime "updated_at", null: false
-    t.string "whatsapp_number", null: false
+    t.string "whatsapp_number"
     t.string "wa_user_id"
-    t.index ["whatsapp_number"], name: "index_customers_on_whatsapp_number", unique: true
+    t.index ["wa_user_id"], name: "index_customers_on_wa_user_id", unique: true, where: "(wa_user_id IS NOT NULL)"
+    t.index ["whatsapp_number"], name: "index_customers_on_whatsapp_number", unique: true, where: "(whatsapp_number IS NOT NULL)"
+    t.check_constraint "whatsapp_number IS NOT NULL OR wa_user_id IS NOT NULL", name: "customers_identity_present"
   end
 
   create_table "messages", force: :cascade do |t|

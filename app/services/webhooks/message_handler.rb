@@ -18,9 +18,9 @@ module Webhooks
 
     def call
       wa_message_id = @item["id"].presence or raise ArgumentError, "message without an id"
-      from = @item["from"].presence or raise ArgumentError, "message without a sender"
+      sender = identify_sender or raise ArgumentError, "message without a sender (no phone number and no user id)"
 
-      customer = Customer.resolve!(whatsapp_number: from, display_name: contact_name(from), wa_user_id: user_id(from))
+      customer = Customer.resolve!(**sender)
       conversation = customer.conversation
 
       inbound_id = insert_inbound(conversation, wa_message_id)
@@ -114,17 +114,27 @@ module Webhooks
       Time.at(Integer(@item["timestamp"].to_s)).utc if @item["timestamp"].to_s.match?(/\A\d+\z/)
     end
 
-    def contact_for(from)
+    # Who sent this: the business-scoped user id and/or the phone number (docs/v2/DESIGN.md §6).
+    # Either may be missing since Meta stopped sending phone numbers for users
+    # with usernames; with neither there is no one to reply to.
+    def identify_sender
+      from = @item["from"].presence
+      user_id = @item["from_user_id"].presence
+      contact = contact_for(from, user_id)
+
+      sender = {
+        whatsapp_number: from || contact&.dig("wa_id").presence,
+        wa_user_id: user_id || contact&.dig("user_id").presence,
+        display_name: contact&.dig("profile", "name")
+      }
+      sender if sender[:whatsapp_number] || sender[:wa_user_id]
+    end
+
+    def contact_for(from, user_id)
       contacts = Array(@value["contacts"]).select { |contact| contact.is_a?(Hash) }
-      contacts.find { |contact| contact["wa_id"] == from } || contacts.first
-    end
-
-    def contact_name(from)
-      contact_for(from)&.dig("profile", "name")
-    end
-
-    def user_id(from)
-      contact_for(from)&.dig("user_id").presence || @item["from_user_id"]
+      contacts.find { |contact| from && contact["wa_id"] == from } ||
+        contacts.find { |contact| user_id && contact["user_id"] == user_id } ||
+        contacts.first
     end
 
     def result(ref, outcome, detail = nil)

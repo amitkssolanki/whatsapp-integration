@@ -44,6 +44,62 @@ RSpec.describe "Webhook processing", type: :request do
       expect(customer.conversation.last_inbound_at).to eq(Time.at(1_786_204_851).utc)
     end
 
+    context "when Meta omits the phone number (username users)" do
+      # Derived from the real order fixture by deleting the phone fields; nothing new is committed.
+      def without_phone(name)
+        fixture_json(name).tap do |json|
+          value = json.dig("entry", 0, "changes", 0, "value")
+          value["contacts"].each { |contact| contact.delete("wa_id") }
+          (value["messages"] || []).each { |message| message.delete("from") }
+        end.to_json
+      end
+
+      it "creates a phone-less customer keyed by the business-scoped user id and still queues the receipt" do
+        delivery = deliver_and_process(without_phone("order"))
+
+        expect(delivery).to be_processed
+        expect(Customer.sole).to have_attributes(whatsapp_number: nil, wa_user_id: "US.1000000000000002", display_name: "Test Customer 2")
+        expect(Order.sole.customer).to eq(Customer.sole)
+        expect(Message.outbound.sole).to have_attributes(status: "pending", purpose: "order_received")
+      end
+
+      it "fills the phone number in when a later message carries it" do
+        deliver_and_process(without_phone("order"))
+        phone_less = Customer.sole
+
+        deliver_and_process(greeting)
+
+        expect(Customer.sole.id).to eq(phone_less.id)
+        expect(Customer.sole.whatsapp_number).to eq("15550100004")
+        expect(Conversation.count).to eq(1)
+      end
+
+      it "recognises a customer first seen by phone when the user id is all that arrives later" do
+        deliver_and_process(greeting)
+        customer = Customer.sole
+
+        deliver_and_process(without_phone("order"))
+
+        expect(Customer.sole.id).to eq(customer.id)
+        expect(Order.sole.customer_id).to eq(customer.id)
+      end
+
+      it "fails the item, writes nothing and keeps the delivery replayable when there is no identifier at all" do
+        body = fixture_json("order").tap do |json|
+          value = json.dig("entry", 0, "changes", 0, "value")
+          value.delete("contacts")
+          value["messages"][0].slice!("id", "timestamp", "type", "order")
+        end.to_json
+
+        delivery = deliver_and_process(body)
+
+        expect(delivery).to have_attributes(status: "failed", last_error_class: "ArgumentError")
+        expect(outcome_results(delivery)).to eq([ "error" ])
+        expect([ Customer.count, Message.count, Order.count ]).to eq([ 0, 0, 0 ])
+        expect(delivery).to be_replayable
+      end
+    end
+
     it "keeps an order with unknown SKUs and flags it for review" do
       Product.where(sku: "BEV-001").destroy_all
 
