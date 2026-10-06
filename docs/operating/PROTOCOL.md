@@ -44,7 +44,7 @@ about a week apart.
 |---|---|---|---|
 | 1 | Normal order | A participant orders from the catalog | real |
 | 2 | Status progression | Natural (sent → delivered → read) | real |
-| 3 | Duplicate webhook | Observed naturally (counted in `ops:report`); plus re-posting one captured, correctly signed delivery body to the endpoint | real (observed) / simulated (re-post) |
+| 3 | Duplicate webhook | Observed naturally (counted in `ops:report` `real`); plus `bin/rails ops:repost_delivery ID=<delivery id> CONFIRM=yes`, which re-ingests one stored delivery's exact bytes and signature (not over HTTP) as a new delivery labeled `injected:repost` | real (observed) / simulated (re-post) |
 | 4 | Replay | Switch on `processing:order` (Health → Fault injection), a participant orders, the delivery fails, switch off, replay from Health → one order | injected failure, real replay |
 | 5 | Outbound permanent failure | Amit temporarily rotates to an invalid token for ~10 minutes → `auth_config`; restore; "Resend all failed in auth_config" | real |
 | 6 | Retryable failure | Switch on `send:5xx`, trigger one send (every send fails while it is on), switch off before the retry fires → retry_scheduled → succeeds | injected |
@@ -71,6 +71,14 @@ Changing `FAULT_INJECTION_ALLOWED`, `CATALOG_SYNC_ENABLED` or `DEMO_MASK_PII` ne
 
 `bin/rails ops:report FROM=… TO=… FORMAT=md` produces every metric from the database.
 Medians and ranges only; no percentiles on small samples.
+
+Every section is computed twice. **`real`** counts only rows that show real platform
+behavior: nothing with an injected fault or a re-post (`injected_faults` not empty) and, for
+outbound messages, nothing sent to simulated "Demo Customer" customers. **`all`** counts every
+row. An **`injected`** summary lists how many rows carry each label. Quote `real` in results
+(duplicates, failures, retries, unknowns, error categories); latency comes from real rows only.
+The Markdown output shows `real` first, then `all`, then the injected summary.
+A re-posted delivery therefore never inflates the real duplicate count.
 
 ## Evidence retained (outside the public repo until sanitized)
 

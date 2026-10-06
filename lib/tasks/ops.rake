@@ -17,6 +17,19 @@ namespace :ops do
     puts(format == "md" ? report.to_markdown : JSON.pretty_generate(report.call))
   end
 
+  desc "Scenario 3: re-ingest a stored delivery's exact bytes and signature as a new, labeled (injected:repost) delivery: ID=<delivery id> CONFIRM=yes"
+  task repost_delivery: :environment do
+    id = Integer(ENV["ID"].to_s, exception: false) or abort "ID=<delivery id> is required, e.g. bin/rails ops:repost_delivery ID=42 CONFIRM=yes"
+    abort "Refusing without CONFIRM=yes: this stores a second copy of delivery ##{id} (labeled injected:repost) and processes it. Nothing was changed." unless ENV["CONFIRM"] == "yes"
+
+    begin
+      copy = Ops::Repost.new(id).call
+    rescue Ops::Repost::Refused => e
+      abort e.message
+    end
+    puts "Re-posted delivery ##{id} as delivery ##{copy.id} (#{copy.status}), labeled #{copy.injected_faults.join(', ')}."
+  end
+
   desc "End-of-period purge: BEFORE=2026-12-01 CONFIRM=yes [FORCE=yes] removes raw bodies, message text, names and phone numbers (docs/operating/PROTOCOL.md). Alias: ops:purge_payloads"
   task purge: :environment do
     before_text = ENV["BEFORE"].to_s

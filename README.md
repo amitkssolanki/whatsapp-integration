@@ -299,7 +299,11 @@ bin/brakeman --no-pager && bin/bundler-audit
 `main`: `lint` (RuboCop), `security` (Brakeman, bundler-audit), and `test`
 (`rspec` against PostgreSQL 17). `bin/rails ops:report FROM=2026-10-20
 TO=2026-11-10 FORMAT=md` prints delivery, order, outbound, latency, status
-anomaly, window, catalog and inbound metrics computed only from the database.
+anomaly, window, catalog and inbound metrics computed only from the database,
+twice: `real` (rows with no injected fault and no simulated demo customer) and `all`, plus
+an `injected` summary by label. `bin/rails ops:repost_delivery ID=… CONFIRM=yes` re-ingests
+a stored delivery's exact bytes as a new delivery labeled `injected:repost` (scenario 3), so
+it never counts as one of Meta's own duplicates.
 
 Operating tools (`docs/operating/PROTOCOL.md`):
 

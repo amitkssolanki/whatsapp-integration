@@ -39,14 +39,20 @@ RSpec.describe Ops::Report, "output" do
     expect(json).not_to include("Hidden Name")
     expect(json).not_to include("US.134")
     expect(json).not_to include("SKU-")
-    expect(JSON.parse(json).keys).to eq(%w[period deliveries orders outbound latency status_anomalies window catalog inbound])
+    parsed = JSON.parse(json)
+    sections = %w[deliveries orders outbound latency status_anomalies window catalog inbound]
+    expect(parsed.keys).to eq(%w[period real all injected])
+    expect(parsed["real"].keys).to eq(sections)
+    expect(parsed["all"].keys).to eq(sections)
   end
 
   it "renders a Markdown summary without identifying data either" do
     markdown = report.to_markdown
 
     expect(markdown).to start_with("# Operations report")
-    expect(markdown).to include("## Webhook deliveries", "## Orders", "## Outbound messages", "## Latency", "## Catalog", "## Inbound messages")
+    expect(markdown).to include("## Real: Webhook deliveries", "## Real: Orders", "## Real: Outbound messages", "## Real: Latency", "## Real: Catalog", "## Real: Inbound messages")
+    expect(markdown).to include("## All (injected and simulated rows included): Outbound messages", "## Injected and re-posted rows")
+    expect(markdown.index("## Real: Outbound messages")).to be < markdown.index("## All (injected and simulated rows included): Outbound messages")
     expect(markdown).to include("| Metric | Value |", "| replays.deliveries_replayed | 0 |")
     expect(markdown).to include("| total | 1 |")
     expect(markdown).to include("accepted_to_delivered | n=1, median 2.0s, min 2.0s, max 2.0s |")

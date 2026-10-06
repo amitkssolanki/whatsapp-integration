@@ -1,7 +1,9 @@
 module Ops
   # Turns an Ops::Report result into a compact Markdown summary: a header and
   # one two-column table per section. Nested counts are flattened to dotted
-  # rows ("by_status.failed"); duration summaries become one row each.
+  # rows ("by_status.failed"); duration summaries become one row each. The
+  # `real` sections come first (what the platform did), then `all` (every row,
+  # injected and simulated ones included), then what was injected.
   class MarkdownRenderer
     TITLES = {
       deliveries: "Webhook deliveries", orders: "Orders", outbound: "Outbound messages",
@@ -18,16 +20,28 @@ module Ops
     def render
       period = @data.fetch(:period)
       lines = [ "# Operations report", "", "Period: #{period[:from]} to #{period[:to]} (end exclusive)  ",
-                "Generated: #{period[:generated_at]}, commit #{period[:git_sha]}", "" ]
-      @data.except(:period).each do |section, values|
-        lines << "## #{TITLES.fetch(section, section.to_s.tr('_', ' ').capitalize)}" << "" << "| Metric | Value |" << "| --- | --- |"
-        rows(values, [], UNITS[section]).each { |name, value| lines << "| #{name} | #{value} |" }
-        lines << ""
-      end
+                "Generated: #{period[:generated_at]}, commit #{period[:git_sha]}", "",
+                "Quote the **Real** sections for platform behavior: rows with an injected fault or a re-posted body, and " \
+                "simulated demo customers, are left out of them. **All** counts every row. Latency is from real rows only.", "" ]
+      section_lines(lines, "Real", @data.fetch(:real))
+      section_lines(lines, "All (injected and simulated rows included)", @data.fetch(:all).except(:latency))
+      table(lines, "Injected and re-posted rows", @data.fetch(:injected), nil)
       lines.join("\n")
     end
 
     private
+
+    def section_lines(lines, group, sections)
+      sections.each do |section, values|
+        table(lines, "#{group}: #{TITLES.fetch(section, section.to_s.tr('_', ' ').capitalize)}", values, UNITS[section])
+      end
+    end
+
+    def table(lines, title, values, unit)
+      lines << "## #{title}" << "" << "| Metric | Value |" << "| --- | --- |"
+      rows(values, [], unit).each { |name, value| lines << "| #{name} | #{value} |" }
+      lines << ""
+    end
 
     def rows(value, path, unit)
       unit = UNITS.fetch(path.last, unit) if path.last

@@ -3,8 +3,8 @@ module Ops
   # the timestamps still show: a read receipt older than the delivery receipt,
   # and a delivery with no `sent` step recorded (a skipped step).
   class StatusAnomaliesSection
-    def initialize(period)
-      @scope = Message.outbound.where(created_at: period)
+    def initialize(period, real: false)
+      @scope = Scopes.outbound(period, real: real)
     end
 
     def call

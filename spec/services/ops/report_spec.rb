@@ -37,7 +37,7 @@ RSpec.describe Ops::Report do
 
   describe "deliveries" do
     it "reports zeros for an empty period" do
-      deliveries = report[:deliveries]
+      deliveries = report[:real][:deliveries]
 
       expect(deliveries[:total]).to eq(0)
       expect(deliveries[:by_status]).to eq(WebhookDelivery.statuses.keys.to_h { |status| [ status, 0 ] })
@@ -61,7 +61,7 @@ RSpec.describe Ops::Report do
       delivery_at(from, body: '{"object":"c"}', status: :ignored, outcome: { "reason" => "no_items", "items" => [], "summary" => {} })
       delivery_at(to, body: '{"object":"d"}')
 
-      deliveries = report[:deliveries]
+      deliveries = report[:real][:deliveries]
 
       expect(deliveries[:total]).to eq(4)
       expect(deliveries[:by_status]).to include("processed" => 1, "failed" => 1, "partially_failed" => 1, "ignored" => 1, "received" => 0)
@@ -74,7 +74,7 @@ RSpec.describe Ops::Report do
 
   describe "orders" do
     it "reports zeros for an empty period" do
-      expect(report[:orders]).to eq(
+      expect(report[:real][:orders]).to eq(
         total: 0,
         review: { "clear" => 0, "needs_review" => 0 },
         by_status: { "received" => 0, "accepted" => 0, "rejected" => 0 },
@@ -93,7 +93,7 @@ RSpec.describe Ops::Report do
       create_order(customer: customer, created_at: inside, status: :accepted, decided_at: inside + 1.hour)
       create_order(customer: customer, created_at: to)
 
-      orders = report[:orders]
+      orders = report[:real][:orders]
 
       expect(orders[:total]).to eq(4)
       expect(orders[:review]).to eq("clear" => 3, "needs_review" => 1)

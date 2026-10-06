@@ -5,8 +5,8 @@ module Ops
     # Same threshold as Message.undelivered.
     UNDELIVERED_AFTER = 10.minutes
 
-    def initialize(period, at:)
-      @scope = Message.outbound.where(created_at: period)
+    def initialize(period, at:, real: false)
+      @scope = Scopes.outbound(period, real: real)
       @at = at
     end
 

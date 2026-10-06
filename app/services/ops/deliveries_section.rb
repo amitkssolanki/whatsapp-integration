@@ -5,8 +5,8 @@ module Ops
     RESULTS = %w[applied duplicate orphan anomaly ignored error].freeze
     KINDS = %w[message status].freeze
 
-    def initialize(period)
-      @scope = WebhookDelivery.where(received_at: period)
+    def initialize(period, real: false)
+      @scope = Scopes.deliveries(period, real: real)
     end
 
     def call

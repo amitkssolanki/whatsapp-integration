@@ -24,7 +24,7 @@ RSpec.describe "ops:report" do
 
     data = JSON.parse(output)
     expect(data["period"]).to include("from" => "2026-10-20T00:00:00Z", "to" => "2026-11-10T00:00:00Z")
-    expect(data["deliveries"]["total"]).to eq(1)
+    expect(data["real"]["deliveries"]["total"]).to eq(1)
   end
 
   it "defaults to the last 24 hours as JSON" do

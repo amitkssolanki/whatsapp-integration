@@ -241,7 +241,7 @@ RSpec.describe Ops::Purge do
       expect(purge(force: true)).to include(customers: 2, messages: 7)
       after_purge = report
 
-      expect(before_purge[:inbound]).to include(distinct_customers: 2, customers_without_phone: 1)
+      expect(before_purge[:real][:inbound]).to include(distinct_customers: 2, customers_without_phone: 1)
       expect(after_purge).to eq(before_purge)
     end
   end

@@ -331,6 +331,13 @@ switch on, run one scenario, switch off. Every firing logs `fault.injected` (war
 and is labeled on the row (`injected_faults`). The Health page
 shows a red banner listing the active toggles.
 
+`Ops::Report` computes every section twice: `real` (rows whose `injected_faults` is empty; for
+outbound messages also not belonging to a customer whose name starts with "Demo Customer") and
+`all`, plus an `injected` summary of the labels. Latency is real-only. Scenario 3's re-post is
+`bin/rails ops:repost_delivery ID=<id> CONFIRM=yes` (`Ops::Repost`): it re-ingests the stored exact
+bytes and signature header through `Webhooks::Ingest` (no HTTP) and labels the new delivery
+`injected:repost` in the same transaction.
+
 ## 13. Purge after the operating period
 
 `bin/rails ops:purge BEFORE=YYYY-MM-DD CONFIRM=yes [FORCE=yes]` (`Ops::Purge`; the old name

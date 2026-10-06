@@ -6,8 +6,8 @@ module Ops
   class WindowSection
     META_WINDOW_CLOSED = 131_047
 
-    def initialize(period)
-      @scope = Message.outbound.where(created_at: period)
+    def initialize(period, real: false)
+      @scope = Scopes.outbound(period, real: real)
     end
 
     def call
