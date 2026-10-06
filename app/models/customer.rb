@@ -19,15 +19,4 @@ class Customer < ApplicationRecord
     Conversation.insert({ customer_id: customer.id }, unique_by: :customer_id)
     customer
   end
-
-  # Legacy V1 entry point, removed when the webhook pipeline moves to resolve!.
-  # Finds the customer for an inbound webhook, creating one (and its
-  # conversation) on first contact.
-  def self.find_or_create_by_whatsapp_number!(number, display_name: nil)
-    customer = find_or_create_by!(whatsapp_number: number) do |c|
-      c.display_name = display_name
-    end
-    customer.create_conversation! unless customer.conversation
-    customer
-  end
 end

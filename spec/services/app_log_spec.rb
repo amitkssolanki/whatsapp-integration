@@ -1,15 +1,7 @@
 require "rails_helper"
 
 RSpec.describe AppLog do
-  def logged
-    io = StringIO.new
-    logger = ActiveSupport::Logger.new(io)
-    Rails.logger.broadcast_to(logger)
-    yield
-    io.string
-  ensure
-    Rails.logger.stop_broadcasting_to(logger)
-  end
+  def logged(&block) = capture_log(&block)
 
   it "writes one key=value line per event" do
     line = logged { described_class.event("webhook.stored", delivery_id: 12, status: "received", error_class: nil) }
