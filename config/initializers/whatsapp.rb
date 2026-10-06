@@ -5,6 +5,9 @@ Rails.application.config.whatsapp = ActiveSupport::OrderedOptions.new.tap do |c|
   c.verify_token = ENV["WHATSAPP_VERIFY_TOKEN"]
   c.app_secret = ENV["WHATSAPP_APP_SECRET"]
   c.catalog_id = ENV["CATALOG_ID"]
+  # Push product changes to the Meta catalog through the API (docs/v2/CATALOG.md).
+  # Off by default; the CSV feed keeps working either way.
+  c.catalog_sync_enabled = ENV["CATALOG_SYNC_ENABLED"] == "true"
   c.api_version = ENV.fetch("WHATSAPP_API_VERSION", "v26.0")
 
   # Skip webhook signature checks. Only ever honored in development and test
