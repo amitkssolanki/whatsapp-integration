@@ -19,6 +19,8 @@ module Ops
         error_codes: @scope.where.not(error_code: nil).group(:error_code).count.transform_keys(&:to_s),
         attempts: { total: @scope.sum(:attempts), messages_retried: @scope.where(attempts: 2..).count },
         unknown: unknown,
+        unknown_resolved: unknown_resolved.count,
+        unknown_unresolved: unknown_ever.count - unknown_resolved.count,
         blocked: @scope.blocked.count,
         guard_overrides: @scope.where.not(guard_override_by: [ nil, "" ]).count,
         undelivered: @scope.where(status: %w[accepted sent], delivered_at: nil).where(accepted_at: ...(@at - UNDELIVERED_AFTER)).count
@@ -26,6 +28,19 @@ module Ops
     end
 
     private
+
+    # Messages that were ever `unknown` (unknown_at is stamped on entry).
+    def unknown_ever
+      @scope.where.not(unknown_at: nil)
+    end
+
+    # Of those, the ones Meta later told us about: now sent, delivered or read,
+    # or carrying a lifecycle timestamp later than unknown_at. Everything else
+    # (still unknown, or failed afterwards) is unresolved.
+    def unknown_resolved
+      unknown_ever.where(status: %w[sent delivered read])
+                  .or(unknown_ever.where("sent_at > unknown_at OR delivered_at > unknown_at OR read_at > unknown_at"))
+    end
 
     # Messages currently `unknown` (the send's outcome is not known) and how
     # many of those already carry a later status timestamp from Meta.

@@ -69,8 +69,8 @@ Add: `status` (integer, null: false, default 0), `purpose` (string),
 `idempotency_key` (string), `order_id` (FK, nullable), `webhook_delivery_id` (FK,
 nullable), `wa_timestamp` (datetime), `attempts` (integer, default 0),
 `next_attempt_at`, `accepted_at`, `sent_at`, `delivered_at`, `read_at`, `failed_at`,
-`blocked_at` (datetime), `error_code` (integer), `error_category` (string),
-`error_title` (string), `error_details` (text), `guard_override_by` (string).
+`blocked_at`, `unknown_at` (datetime), `error_code` (integer), `error_category` (string),
+`error_title` (string), `error_details` (text), `guard_override_by` (string). `unknown_at` is stamped whenever a message enters `unknown`; `Ops::Report` uses it for `unknown_resolved` (now sent/delivered/read, or a lifecycle timestamp after `unknown_at`) and `unknown_unresolved`.
 
 Indexes: UNIQUE `wa_message_id` WHERE NOT NULL; UNIQUE `idempotency_key` WHERE NOT
 NULL; `[direction, status, accepted_at]`; `order_id`; `webhook_delivery_id`.

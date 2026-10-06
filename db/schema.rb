@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_000020) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_000021) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -87,6 +87,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_000020) do
     t.string "error_title"
     t.text "error_details"
     t.string "guard_override_by"
+    t.datetime "unknown_at"
     t.index ["conversation_id"], name: "index_messages_on_conversation_id"
     t.index ["direction", "status", "accepted_at"], name: "index_messages_on_direction_and_status_and_accepted_at"
     t.index ["idempotency_key"], name: "index_messages_on_idempotency_key", unique: true, where: "(idempotency_key IS NOT NULL)"

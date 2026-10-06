@@ -72,8 +72,12 @@ class Message < ApplicationRecord
   # their timestamp behind. After the send settles (accepted, or unknown after
   # a read timeout or a stall) the state catches up to the furthest step Meta
   # has reported, so proof of delivery is never stranded behind `unknown`.
+  #
+  # Entering `unknown` also stamps `unknown_at` (once per entry), so the report
+  # can say how many unknowns were later resolved.
   def transition!(to, **attrs)
-    super.tap { |moved| catch_up_lifecycle! if moved && %w[accepted unknown].include?(to.to_s) }
+    attrs = { unknown_at: Time.current }.merge(attrs) if to.to_s == "unknown"
+    super(to, **attrs).tap { |moved| catch_up_lifecycle! if moved && %w[accepted unknown].include?(to.to_s) }
   end
 
   # Records a lifecycle event (accepted/sent/delivered/read) and moves the state

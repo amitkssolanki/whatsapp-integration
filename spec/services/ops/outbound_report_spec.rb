@@ -19,6 +19,7 @@ RSpec.describe Ops::Report, "outbound metrics" do
       by_status: Message.statuses.keys.excluding("received").to_h { |status| [ status, 0 ] },
       failed_by_error_category: {}, error_codes: {}, attempts: { total: 0, messages_retried: 0 },
       unknown: { count: 0, with_sent_at: 0, with_delivered_at: 0, with_read_at: 0 },
+      unknown_resolved: 0, unknown_unresolved: 0,
       blocked: 0, guard_overrides: 0, undelivered: 0
     )
     expect(report[:latency]).to eq(accepted_to_sent: no_stats, sent_to_delivered: no_stats, delivered_to_read: no_stats, accepted_to_delivered: no_stats)
@@ -60,6 +61,10 @@ RSpec.describe Ops::Report, "outbound metrics" do
       expect(outbound[:undelivered]).to eq(2)
     end
 
+    it "reports no resolved or unresolved unknowns for messages that never entered unknown" do
+      expect(report[:outbound]).to include(unknown_resolved: 0, unknown_unresolved: 0)
+    end
+
     it "evaluates undelivered at the end of the period" do
       earlier = described_class.new(from: from, to: to - 15.minutes).call
       expect(earlier[:outbound][:undelivered]).to eq(1)
@@ -80,6 +85,44 @@ RSpec.describe Ops::Report, "outbound metrics" do
 
     it "separates window blocks, Meta's 131047 refusals and disagreements" do
       expect(report[:window]).to eq(blocked_window_closed: 1, failures_131047: 2, disagreements: 1)
+    end
+  end
+
+  describe "unknown resolution" do
+    let(:unknown_at) { t + 10.minutes }
+
+    def was_unknown(status, **attrs) = outbound(status, unknown_at: unknown_at, **attrs)
+
+    it "counts messages that were unknown and are now sent, delivered or read as resolved, and the rest as unresolved" do
+      was_unknown(:delivered, accepted_at: t, delivered_at: unknown_at + 1.minute)
+      was_unknown(:read, read_at: unknown_at + 2.minutes)
+      was_unknown(:sent, sent_at: unknown_at + 30.seconds)
+      was_unknown(:unknown)
+      was_unknown(:unknown, sent_at: t) # stamped before unknown_at: no later evidence
+      was_unknown(:failed, failed_at: unknown_at + 1.minute)
+      outbound(:accepted, accepted_at: t) # never unknown
+
+      expect(report[:outbound]).to include(unknown_resolved: 3, unknown_unresolved: 3)
+      expect(report[:outbound][:unknown][:count]).to eq(2)
+    end
+
+    it "also resolves by a lifecycle timestamp later than unknown_at when the status column lags" do
+      was_unknown(:unknown, delivered_at: unknown_at + 1.minute)
+
+      expect(report[:outbound]).to include(unknown_resolved: 1, unknown_unresolved: 0)
+    end
+
+    it "only looks at messages created in the period" do
+      create_outbound(status: :delivered, customer: customer, created_at: from - 1.day, unknown_at: from - 1.day, delivered_at: from - 1.day + 1.hour)
+
+      expect(report[:outbound]).to include(unknown_resolved: 0, unknown_unresolved: 0)
+    end
+
+    it "is rendered in the Markdown summary" do
+      was_unknown(:delivered, delivered_at: unknown_at + 1.minute)
+
+      markdown = described_class.new(from: from, to: to).to_markdown
+      expect(markdown).to include("| unknown_resolved | 1 |", "| unknown_unresolved | 0 |")
     end
   end
 end

@@ -189,4 +189,25 @@ RSpec.describe Message, type: :model do
       expect(described_class.undelivered).to match_array([ stuck, stuck_sent ])
     end
   end
+
+  describe "unknown_at" do
+    it "is stamped when a message enters unknown, and not by other transitions" do
+      message = create_outbound(status: :sending)
+      expect(message.transition!(:accepted)).to be(true)
+      expect(message.unknown_at).to be_nil
+
+      other = create_outbound(status: :sending)
+      freeze_time do
+        expect(other.transition!(:unknown, error_category: "ambiguous")).to be(true)
+        expect(other.unknown_at).to eq(Time.current)
+      end
+    end
+
+    it "is not stamped when the transition is refused" do
+      message = create_outbound(status: :pending)
+
+      expect(message.transition!(:unknown)).to be(false)
+      expect(message.reload.unknown_at).to be_nil
+    end
+  end
 end
