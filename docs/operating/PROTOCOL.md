@@ -55,7 +55,10 @@ about a week apart.
 | 11 | Unknown SKU | Amit adds one item directly in Commerce Manager; participant orders it → `unknown_sku` | real |
 
 Fault injection toggles are environment variables read at runtime, logged on every
-use, and must be off outside a scenario. Every injected event is labeled in the log.
+use, and must be off outside a scenario. Every injected event is labeled in the log
+(`fault.injected`) and on the affected record ("injected" / `[injected]`), and the Health
+page shows a red banner while any toggle is active. In production they only work with
+`FAULT_INJECTION_ALLOWED=1`; the app refuses to boot with `FAULT_INJECT` set without it.
 
 ## Metrics
 
@@ -77,5 +80,6 @@ Medians and ranges only; no percentiles on small samples.
 
 1. Tag `ops-end`, take the final dump into the private archive.
 2. Purge raw webhook bodies and message payloads older than 30 days after the end date
-   (aggregates and statuses stay).
+   (aggregates and statuses stay): `bin/rails ops:purge_payloads BEFORE=YYYY-MM-DD CONFIRM=yes`.
+   Purged deliveries can no longer be replayed.
 3. Write results only from `ops:report` and the scenario log.

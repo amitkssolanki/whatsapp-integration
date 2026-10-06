@@ -42,7 +42,7 @@ module AdminHelper
     time.strftime(seconds ? "%b %-d, %H:%M:%S" : "%b %-d, %H:%M")
   end
 
-  # 4500 seconds -> "1h 15m"; under a minute -> "<1m".
+  # A short span for countdowns ("23h 5m left"): 4500 seconds -> "1h 15m"; under a minute -> "<1m".
   def duration_words(seconds)
     minutes = (seconds.to_f / 60).floor
     return "<1m" if minutes < 1
@@ -51,10 +51,12 @@ module AdminHelper
     hours.positive? ? "#{hours}h #{minutes}m" : "#{minutes}m"
   end
 
+  # "about 2 months ago", with the exact moment (and year) in the title attribute.
+  # Long gaps read as months, not as "1406h 14m".
   def ago(time, now: Time.current)
     return "—" if time.blank?
 
-    "#{duration_words(now - time)} ago"
+    tag.span("#{distance_of_time_in_words(time, now)} ago", title: time.strftime("%Y-%m-%d %H:%M:%S %Z"))
   end
 
   def badge(text, tone = "neutral")

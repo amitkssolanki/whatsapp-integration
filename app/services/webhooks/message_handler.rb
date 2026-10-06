@@ -39,6 +39,7 @@ module Webhooks
     def react(customer, conversation, inbound_id)
       case @item["type"]
       when "order"
+        inject_order_failure!
         order = Orders::Builder.new(customer: customer, source_message_id: inbound_id, order_payload: @item["order"]).call
         queue_reply(conversation, @responder.order_received(order: order), order_id: order.id)
         "order_id=#{order.id}"
@@ -49,6 +50,15 @@ module Webhooks
       else
         "type=#{@item['type']} recorded, no reply"
       end
+    end
+
+    # Scenario 4 (docs/operating/PROTOCOL.md): fail the item so the delivery
+    # becomes failed/partially_failed and can be replayed once the toggle is off.
+    def inject_order_failure!
+      return unless FaultInjection.active?("processing:order")
+
+      label = FaultInjection.fire("processing:order", delivery_id: @delivery.id)
+      raise FaultInjection::Injected, label
     end
 
     def insert_inbound(conversation, wa_message_id)

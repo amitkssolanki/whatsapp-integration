@@ -32,4 +32,16 @@ RSpec.describe WebhookDelivery, type: :model do
       expect(replayable).to match_array(%w[failed partially_failed processed])
     end
   end
+
+  describe "a purged delivery" do
+    let(:delivery) { create_delivery(status: :failed, raw_body: "", purged_at: Time.utc(2026, 12, 2, 9)) }
+
+    it "is not replayable and says why, changing nothing" do
+      expect(delivery).to be_purged
+      expect(delivery).not_to be_replayable
+      expect { delivery.replay!(by: "operator") }
+        .to raise_error(WebhookDelivery::NotReplayable, /raw body was purged on 2026-12-02.*no longer be replayed/)
+      expect(delivery.reload).to have_attributes(status: "failed", replay_count: 0)
+    end
+  end
 end

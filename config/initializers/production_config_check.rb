@@ -24,6 +24,10 @@ module ProductionConfigCheck
       problems << "WHATSAPP_ALLOW_UNSIGNED must not be set in production (webhook signatures are mandatory)"
     end
 
+    if env["FAULT_INJECT"].to_s.strip.present? && env["FAULT_INJECTION_ALLOWED"] != "1"
+      problems << "FAULT_INJECT is set without FAULT_INJECTION_ALLOWED=1 (fault injection must be explicitly allowed in production)"
+    end
+
     return if problems.empty?
 
     raise Error, "Refusing to boot in production: #{problems.join('; ')}. " \

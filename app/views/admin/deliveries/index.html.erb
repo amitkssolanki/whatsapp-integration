@@ -36,6 +36,8 @@
             <%= link_to "View →", admin_delivery_path(delivery) %>
             <% if delivery.replayable? %>
               <%= button_to "Replay", replay_admin_delivery_path(delivery), method: :post, class: "btn", form_class: "inline" %>
+            <% elsif delivery.purged? %>
+              <span class="muted" title="Raw body purged <%= admin_time(delivery.purged_at) %>">purged</span>
             <% end %>
           </td>
         </tr>

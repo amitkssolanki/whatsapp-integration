@@ -56,3 +56,54 @@ RSpec.describe "ops:report" do
     $stdout = original
   end
 end
+
+RSpec.describe "ops:purge_payloads" do
+  before(:all) { Rails.application.load_tasks unless Rake::Task.task_defined?("ops:purge_payloads") }
+
+  let(:task) { Rake::Task["ops:purge_payloads"] }
+  let(:body) { '{"object":"whatsapp_business_account","entry":[]}' }
+  let(:cutoff) { Date.current.iso8601 }
+  let!(:old_delivery) { create_delivery(body: body, received_at: 40.days.ago) }
+  let!(:old_message) { create_outbound(created_at: 40.days.ago, status: :delivered) }
+
+  def run_task(**env)
+    task.reenable
+    saved = ENV.to_h.slice("BEFORE", "CONFIRM")
+    %w[BEFORE CONFIRM].each { |key| ENV.delete(key) }
+    env.each { |key, value| ENV[key.to_s] = value }
+    yield
+  ensure
+    %w[BEFORE CONFIRM].each { |key| ENV.delete(key) }
+    saved.each { |key, value| ENV[key] = value }
+  end
+
+  it "purges and prints the counts with BEFORE and CONFIRM=yes" do
+    run_task(BEFORE: cutoff, CONFIRM: "yes") do
+      expect { task.invoke }.to output(/webhook_deliveries raw_body blanked: 1.*messages raw_payload cleared:\s+1/m).to_stdout
+    end
+
+    expect(old_delivery.reload).to have_attributes(raw_body: "", purged_at: be_present)
+    expect(old_message.reload.raw_payload).to eq({})
+  end
+
+  it "refuses without CONFIRM=yes, says what it would do and changes nothing" do
+    [ {}, { CONFIRM: "y" }, { CONFIRM: "true" } ].each do |extra|
+      run_task(BEFORE: cutoff, **extra) do
+        expect { task.invoke }.to raise_error(SystemExit).and output(/without CONFIRM=yes.*1 webhook delivery bodies and 1 message payloads/m).to_stderr
+      end
+    end
+
+    expect(old_delivery.reload).to have_attributes(raw_body: body, purged_at: nil)
+    expect(old_message.reload.raw_payload).not_to eq({})
+  end
+
+  it "refuses a missing, malformed, impossible or future BEFORE" do
+    [ nil, "12/01/2026", "2026-13-45", "2999-01-01" ].each do |value|
+      run_task(**{ BEFORE: value, CONFIRM: "yes" }.compact) do
+        expect { task.invoke }.to raise_error(SystemExit).and output(/BEFORE/).to_stderr
+      end
+    end
+
+    expect(old_delivery.reload.purged_at).to be_nil
+  end
+end

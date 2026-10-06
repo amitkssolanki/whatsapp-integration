@@ -60,6 +60,7 @@ transaction is atomic with it.
 | last_attempted_at, processed_at | datetime | |
 | replay_count | integer, null: false, default 0 | |
 | last_replayed_at, last_replayed_by | datetime, string | |
+| purged_at | datetime | set by `ops:purge_payloads` (§13); raw_body is then '' and raw_body_base64 NULL, and the delivery can no longer be replayed |
 
 Indexes: `[status, received_at]`, `body_sha256`, `received_at`.
 
@@ -69,8 +70,8 @@ Add: `status` (integer, null: false, default 0), `purpose` (string),
 `idempotency_key` (string), `order_id` (FK, nullable), `webhook_delivery_id` (FK,
 nullable), `wa_timestamp` (datetime), `attempts` (integer, default 0),
 `next_attempt_at`, `accepted_at`, `sent_at`, `delivered_at`, `read_at`, `failed_at`,
-`blocked_at` (datetime), `error_code` (integer), `error_category` (string),
-`error_title` (string), `error_details` (text), `guard_override_by` (string).
+`blocked_at`, `unknown_at` (datetime), `error_code` (integer), `error_category` (string),
+`error_title` (string), `error_details` (text), `guard_override_by` (string). `unknown_at` is stamped whenever a message enters `unknown`; `Ops::Report` uses it for `unknown_resolved` (now sent/delivered/read, or a lifecycle timestamp after `unknown_at`) and `unknown_unresolved`.
 
 Indexes: UNIQUE `wa_message_id` WHERE NOT NULL; UNIQUE `idempotency_key` WHERE NOT
 NULL; `[direction, status, accepted_at]`; `order_id`; `webhook_delivery_id`.
@@ -280,7 +281,7 @@ acceptance message states the final total.
 ## 10. Replay and resend
 
 Replay (operator, POST + CSRF, Basic auth): only deliveries in failed,
-partially_failed, processed. Re-verifies the stored signature against the stored body
+partially_failed, processed whose body has not been purged. Re-verifies the stored signature against the stored body
 first. Re-runs the full raw body through ProcessWebhookDeliveryJob; idempotency makes
 applied items no-ops. Records replay_count, last_replayed_at, last_replayed_by and a
 `webhook.replayed` log event. Resend acts on a message row (§3 rules).
@@ -291,3 +292,41 @@ Structured key=value/JSON logs with request_id, delivery_id, message_id (ours),
 order_id, job_id, error_category. Never log Meta message ids (they embed phone
 numbers), phone numbers (mask to last 4), names, or payload bodies.
 `DEMO_MASK_PII=1` masks phone numbers and names in every admin view.
+
+## 12. Fault injection (operating-period scenarios 4, 6, 7)
+
+`FaultInjection` reads `FAULT_INJECT` (comma-separated) on every check:
+
+| toggle | effect |
+|---|---|
+| `processing:order` | `MessageHandler` raises `FaultInjection::Injected` for order items: the item rolls back, the delivery becomes failed/partially_failed and is replayable once the toggle is removed. The item detail reads `FaultInjection::Injected: injected:processing:order`. |
+| `send:5xx` | `WhatsappClient` returns a synthetic 503 (`transient_platform`, retryable) without calling Meta. The message's `error_details` starts with `[injected]`. |
+| `send:read_timeout_after_send` | the real request is made, the response is discarded and the ambiguous result returned, so the message becomes `unknown`. `error_details` starts with `[injected]`. |
+
+Only honoured when `Rails.env.local?`, or in production with `FAULT_INJECTION_ALLOWED=1`;
+production refuses to boot with `FAULT_INJECT` set but not allowed. A toggle fires for
+every matching event while set; every firing logs `fault.injected` (warn) with the kind.
+The Health page shows a red banner listing the active toggles.
+
+## 13. Purge after the operating period
+
+`bin/rails ops:purge_payloads BEFORE=YYYY-MM-DD CONFIRM=yes` (`Ops::Purge`) removes the
+personal data that raw payloads hold and keeps all aggregates: `webhook_deliveries` received
+before the date get `raw_body = ''`, `raw_body_base64 = NULL` and `purged_at`; `messages`
+created before the date get `raw_payload = {}`, except outbound messages still
+`pending`/`sending`/`retry_scheduled` (their payload is the request about to be sent; the
+task reports how many were skipped). Without `CONFIRM=yes` the task refuses and prints what
+it would do. BEFORE may not be in the future. A purged delivery refuses replay
+("the raw body was purged on <date>") and the admin UI hides its Replay button.
+
+## 14. Demo simulator (local screenshots and video only)
+
+`bin/rails demo:simulate` (`Demo::Simulator`) plays a fixed, seeded script through the real
+webhook controller and jobs so the admin UI can be populated for screenshots. It runs only in
+development, never in production, and only against a database whose name contains `_demo`
+(`DATABASE_URL=postgres:///whatsapp_integration_demo bin/rails db:prepare db:seed demo:simulate`).
+`WhatsappClient` is pointed at an in-process Faraday adapter, so no request can leave the
+process whatever token is configured; statuses arrive as correctly signed POSTs (demo app
+secret); jobs run in the foreground. Simulated records are identifiable: customers are
+"Demo Customer N" with fake numbers, every log event of the run carries `simulated=true`,
+webhook bodies carry `"simulated":true` and Meta ids start with `wamid.DEMO`.

@@ -45,7 +45,7 @@ class WhatsappClient
     return payload if payload.is_a?(Result)
 
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    result = post(payload)
+    result = injected_5xx(callback_id) || post_and_maybe_discard(payload, callback_id)
     log(callback_id, result, started)
     result
   rescue Faraday::Error => e
@@ -63,6 +63,28 @@ class WhatsappClient
   end
 
   private
+
+  # Fault injection (FaultInjection, docs/operating/PROTOCOL.md 6): a synthetic
+  # 503 without calling Meta. Labeled in the details stored on the message row.
+  def injected_5xx(callback_id)
+    return unless FaultInjection.active?("send:5xx")
+
+    FaultInjection.fire("send:5xx", message_id: callback_id)
+    classification = Whatsapp::ErrorClassifier.classify(code: nil, http_status: 503)
+    error_result(http_status: 503, title: "Service Unavailable (injected)", details: "#{FaultInjection::INJECTED_PREFIX} send:5xx: synthetic 503, Meta was not called",
+                 category: classification.category)
+  end
+
+  # Fault injection (docs/operating/PROTOCOL.md 7): the real request is made,
+  # then the response is thrown away, exactly as if the read timeout had fired.
+  def post_and_maybe_discard(payload, callback_id)
+    result = post(payload)
+    return result unless FaultInjection.active?("send:read_timeout_after_send")
+
+    FaultInjection.fire("send:read_timeout_after_send", message_id: callback_id, discarded_http_status: result.http_status, discarded_ok: result.success?)
+    error_result(title: "Read timeout (injected)", details: "#{FaultInjection::INJECTED_PREFIX} send:read_timeout_after_send: the request was sent, the response was discarded",
+                 category: Whatsapp::ErrorClassifier::AMBIGUOUS)
+  end
 
   def build_payload(recipient, request, callback_id)
     address = address_for(recipient) or return invalid("The customer has neither a phone number nor a user id")

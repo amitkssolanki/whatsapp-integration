@@ -33,6 +33,7 @@ RSpec.describe StallSweeperJob, type: :job do
       described_class.perform_now
 
       expect(stuck.reload.status).to eq("unknown")
+      expect(stuck.unknown_at).to be_within(5.seconds).of(Time.current)
     end
 
     it "leaves recent sends and every other outbound status alone" do

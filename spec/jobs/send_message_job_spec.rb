@@ -324,13 +324,22 @@ RSpec.describe SendMessageJob, type: :job do
   end
 
   describe "ambiguous outcomes" do
+    it "does not stamp unknown_at for sends that settle any other way" do
+      message = outbound
+      graph.reply(200, ok_send)
+
+      perform(message)
+
+      expect(message.reload.unknown_at).to be_nil
+    end
+
     it "marks a read timeout unknown and never sends again, however often the job runs" do
       message = outbound
       graph.fail_with(Faraday::TimeoutError.new(Net::ReadTimeout.new))
 
       perform(message)
 
-      expect(message.reload).to have_attributes(status: "unknown", attempts: 1, error_category: "ambiguous", wa_message_id: nil)
+      expect(message.reload).to have_attributes(status: "unknown", attempts: 1, error_category: "ambiguous", wa_message_id: nil, unknown_at: now)
       expect(retry_jobs).to be_empty
 
       3.times { perform(message) }

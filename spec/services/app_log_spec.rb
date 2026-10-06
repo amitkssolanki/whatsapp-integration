@@ -26,6 +26,31 @@ RSpec.describe AppLog do
     expect(io.string).to include("WARN event=window.override_send message_id=5 by=amit")
   end
 
+  describe ".tagged" do
+    it "adds the fields to every event inside the block, nested, and stops afterwards" do
+      line = logged do
+        described_class.tagged(simulated: true) do
+          described_class.event("a")
+          described_class.tagged(run: 2) { described_class.warn("b", delivery_id: 1) }
+          described_class.event("c", simulated: false)
+        end
+        described_class.event("d")
+      end
+
+      expect(line.lines[0]).to include("event=a simulated=true")
+      expect(line.lines[1]).to include("event=b simulated=true run=2 delivery_id=1")
+      expect(line.lines[2]).to include("event=c simulated=false")
+      expect(line.lines[3]).to include("event=d")
+      expect(line.lines[3]).not_to include("simulated")
+    end
+
+    it "restores the previous tags even when the block raises" do
+      expect { described_class.tagged(simulated: true) { raise "boom" } }.to raise_error("boom")
+
+      expect(described_class.context).to eq({})
+    end
+  end
+
   it "refuses PII-shaped fields outside production" do
     %i[body whatsapp_number wa_message_id display_name from].each do |field|
       expect { described_class.event("x", field => "secret") }.to raise_error(ArgumentError, /must not log/)

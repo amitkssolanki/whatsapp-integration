@@ -23,6 +23,9 @@
       <% else %>—<% end %>
     </dd>
     <dt>Body fingerprint</dt><dd><code><%= @delivery.body_sha256.first(12) %></code></dd>
+    <% if @delivery.purged? %>
+      <dt>Raw body</dt><dd><%= badge("purged", "neutral") %> removed <%= admin_time(@delivery.purged_at) %>; cannot be replayed</dd>
+    <% end %>
   </dl>
   <% if @delivery.replayable? %>
     <p><%= button_to "Replay this delivery", replay_admin_delivery_path(@delivery), method: :post, class: "btn btn-warn" %></p>
