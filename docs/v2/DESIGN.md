@@ -60,6 +60,7 @@ transaction is atomic with it.
 | last_attempted_at, processed_at | datetime | |
 | replay_count | integer, null: false, default 0 | |
 | last_replayed_at, last_replayed_by | datetime, string | |
+| purged_at | datetime | set by `ops:purge_payloads` (§13); raw_body is then '' and raw_body_base64 NULL, and the delivery can no longer be replayed |
 
 Indexes: `[status, received_at]`, `body_sha256`, `received_at`.
 
@@ -280,7 +281,7 @@ acceptance message states the final total.
 ## 10. Replay and resend
 
 Replay (operator, POST + CSRF, Basic auth): only deliveries in failed,
-partially_failed, processed. Re-verifies the stored signature against the stored body
+partially_failed, processed whose body has not been purged. Re-verifies the stored signature against the stored body
 first. Re-runs the full raw body through ProcessWebhookDeliveryJob; idempotency makes
 applied items no-ops. Records replay_count, last_replayed_at, last_replayed_by and a
 `webhook.replayed` log event. Resend acts on a message row (§3 rules).
@@ -306,3 +307,14 @@ Only honoured when `Rails.env.local?`, or in production with `FAULT_INJECTION_AL
 production refuses to boot with `FAULT_INJECT` set but not allowed. A toggle fires for
 every matching event while set; every firing logs `fault.injected` (warn) with the kind.
 The Health page shows a red banner listing the active toggles.
+
+## 13. Purge after the operating period
+
+`bin/rails ops:purge_payloads BEFORE=YYYY-MM-DD CONFIRM=yes` (`Ops::Purge`) removes the
+personal data that raw payloads hold and keeps all aggregates: `webhook_deliveries` received
+before the date get `raw_body = ''`, `raw_body_base64 = NULL` and `purged_at`; `messages`
+created before the date get `raw_payload = {}`, except outbound messages still
+`pending`/`sending`/`retry_scheduled` (their payload is the request about to be sent; the
+task reports how many were skipped). Without `CONFIRM=yes` the task refuses and prints what
+it would do. BEFORE may not be in the future. A purged delivery refuses replay
+("the raw body was purged on <date>") and the admin UI hides its Replay button.

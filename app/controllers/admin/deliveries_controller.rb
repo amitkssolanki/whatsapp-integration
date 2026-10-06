@@ -28,11 +28,11 @@ module Admin
     end
 
     # Replays every delivery that is waiting on an operator (failed or only
-    # partly applied). Idempotency keys make each replay safe.
+    # partly applied) and still has its body. Idempotency keys make each replay safe.
     def replay_failed
       queued = 0
       refused = []
-      WebhookDelivery.where(status: %w[failed partially_failed]).order(:id).find_each do |delivery|
+      WebhookDelivery.where(status: %w[failed partially_failed], purged_at: nil).order(:id).find_each do |delivery|
         delivery.replay!(by: current_operator)
         queued += 1
       rescue WebhookDelivery::ReplayError, ApplicationJob::EnqueueFailed => error

@@ -48,6 +48,15 @@ RSpec.describe "Admin deliveries", type: :request do
       expect(response.body).to include(">Replay<", "Replay all failed (1)")
     end
 
+    it "hides Replay for a purged delivery and says it is purged" do
+      create_delivery(status: :failed, raw_body: "", purged_at: Time.utc(2026, 12, 2))
+
+      get "/admin/deliveries"
+
+      expect(response.body).not_to include(">Replay<")
+      expect(response.body).to include("purged")
+    end
+
     it "never loads or renders the raw body" do
       delivery
 
@@ -86,6 +95,15 @@ RSpec.describe "Admin deliveries", type: :request do
       expect(response.body).not_to include("Replay this delivery")
     end
 
+    it "shows when the body was purged and offers no Replay on the detail page" do
+      d = delivery(:failed, raw_body: "", purged_at: Time.utc(2026, 12, 2, 9, 30))
+
+      get "/admin/deliveries/#{d.id}"
+
+      expect(response.body).to include("purged", "cannot be replayed")
+      expect(response.body).not_to include("Replay this delivery")
+    end
+
     it "cannot reach the raw body even by accident" do
       d = delivery
 
@@ -110,6 +128,26 @@ RSpec.describe "Admin deliveries", type: :request do
       expect(replay_jobs.size).to eq(1)
       follow_redirect!
       expect(response.body).to include("queued for replay")
+    end
+
+    it "flashes the purge reason when a purged delivery is replayed anyway" do
+      d = delivery(:failed, raw_body: "", purged_at: Time.utc(2026, 12, 2))
+
+      post "/admin/deliveries/#{d.id}/replay"
+      follow_redirect!
+
+      expect(response.body).to include("Not done:", "raw body was purged on 2026-12-02")
+      expect(replay_jobs).to be_empty
+    end
+
+    it "skips purged deliveries in the bulk replay" do
+      kept = delivery(:failed)
+      purged = delivery(:failed, raw_body: "", purged_at: Time.utc(2026, 12, 2))
+
+      post "/admin/deliveries/replay_failed"
+
+      expect(kept.reload).to be_processing
+      expect(purged.reload).to be_failed
     end
 
     it "flashes the refusal for a delivery that cannot be replayed" do

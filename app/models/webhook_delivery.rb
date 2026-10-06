@@ -49,8 +49,13 @@ class WebhookDelivery < ApplicationRecord
     false
   end
 
+  # The raw body was removed by Ops::Purge; the row keeps only its aggregates.
+  def purged?
+    purged_at.present?
+  end
+
   def replayable?
-    REPLAYABLE_STATUSES.include?(status)
+    REPLAYABLE_STATUSES.include?(status) && !purged?
   end
 
   # Operator replay (docs/v2/DESIGN.md §10): re-runs the stored body through the
@@ -61,6 +66,7 @@ class WebhookDelivery < ApplicationRecord
   # current app secret first, so a row edited after the fact (or stored under a
   # secret that has since been rotated away) is never fed back into the app.
   def replay!(by:)
+    raise NotReplayable, "the raw body was purged on #{purged_at.to_date.iso8601}, so this delivery can no longer be replayed" if purged?
     raise NotReplayable, "a #{status} delivery cannot be replayed" unless replayable?
 
     unless stored_signature_valid?
