@@ -1,0 +1,19 @@
+<%# locals: listing ({count, recent}), replay (show a Replay button per row) %>
+<% if listing[:recent].empty? %>
+  <p class="muted">None.</p>
+<% else %>
+  <ul>
+    <% listing[:recent].each do |delivery| %>
+      <li>
+        <%= link_to "delivery ##{delivery.id}", admin_delivery_path(delivery) %>
+        · <%= ago(delivery.received_at) %>
+        · <%= outcome_summary(delivery) %>
+        <% if delivery.last_error_class.present? %>· <%= delivery.last_error_class %><% end %>
+        <% if local_assigns[:replay] && delivery.replayable? %>
+          <%= button_to "Replay", replay_admin_delivery_path(delivery), method: :post, class: "btn", form_class: "inline" %>
+        <% end %>
+      </li>
+    <% end %>
+  </ul>
+  <% if listing[:count] > listing[:recent].size %><p class="muted">Showing <%= listing[:recent].size %> of <%= listing[:count] %>. <%= link_to "All deliveries", admin_deliveries_path %></p><% end %>
+<% end %>

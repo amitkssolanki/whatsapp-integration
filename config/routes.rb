@@ -22,6 +22,12 @@ Rails.application.routes.draw do
   end
 
   namespace :admin do
+    root "health#show"
+    get "health" => "health#show", as: :health
+    resource :catalog, only: [], controller: "catalog" do
+      post :sync_now
+      post :reconcile_now
+    end
     resources :conversations, only: [ :index, :show ]
     resources :orders, only: [ :index, :show ] do
       member do
@@ -35,6 +41,7 @@ Rails.application.routes.draw do
         post :requeue
         post :override_window
       end
+      post :resend_failed, on: :collection
     end
     resources :deliveries, only: [ :index, :show ] do
       post :replay, on: :member

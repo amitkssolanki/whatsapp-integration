@@ -21,6 +21,17 @@ module Admin
               "Message ##{@message.id} queued to send outside the 24h window as an experiment."
     end
 
+    # Every failed message of one fixable category, e.g. after replacing a token.
+    def resend_failed
+      category = params[:category].to_s
+      result = Message.resend_failed!(category: category, by: current_operator)
+      if result.ok?
+        redirect_back_or_to admin_health_path, notice: "#{result.count} failed #{'message'.pluralize(result.count)} (#{category}) queued to send again."
+      else
+        redirect_back_or_to admin_health_path, alert: "Not done: #{result.reason}"
+      end
+    end
+
     private
 
     def set_message

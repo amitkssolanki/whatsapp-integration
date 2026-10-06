@@ -1,0 +1,188 @@
+<% content_for :title, "Admin · Health" %>
+<% live_refresh %>
+<% deliveries = @snapshot[:deliveries] %>
+<% outbound = @snapshot[:outbound] %>
+<% banner = @snapshot[:config_banner] %>
+<% failed_deliveries = deliveries[:failed][:count] + deliveries[:partially_failed][:count] %>
+
+<h1>Health</h1>
+<p class="muted">As of <%= admin_time(@snapshot[:generated_at], seconds: true) %>. Read-only counts; the buttons queue work and never call Meta from this page.</p>
+
+<% if banner[:active] %>
+  <div class="banner banner-bad" role="alert">
+    Sending is failing because of configuration (<%= banner[:categories].join(", ") %>):
+    <%= banner[:failures] %> <%= "failure".pluralize(banner[:failures]) %> in the last hour, latest <%= ago(banner[:latest_failed_at]) %>
+    <% if banner[:latest_error_code] || banner[:latest_error_title].present? %>
+      (<%= [ ("code #{banner[:latest_error_code]}" if banner[:latest_error_code]), scrub_ids(banner[:latest_error_title]).presence ].compact.join(": ") %>)
+    <% end %>.
+    Fix the token or account settings, then use “Resend all failed” below.
+  </div>
+<% end %>
+
+<div class="health-grid">
+  <section class="card" id="deliveries">
+    <h2>Webhook deliveries</h2>
+    <div class="bar">
+      <span class="big <%= failed_deliveries.positive? ? 'bad' : 'ok' %>"><%= failed_deliveries %></span>
+      <span>failed or partially failed</span>
+      <% if failed_deliveries.positive? %>
+        <%= button_to "Replay all failed", replay_failed_admin_deliveries_path, method: :post, class: "btn btn-warn", form_class: "inline" %>
+      <% end %>
+    </div>
+    <strong>Failed (<%= deliveries[:failed][:count] %>)</strong>
+    <%= render "admin/health/delivery_list", listing: deliveries[:failed], replay: true %>
+    <strong>Partially failed (<%= deliveries[:partially_failed][:count] %>)</strong>
+    <%= render "admin/health/delivery_list", listing: deliveries[:partially_failed], replay: true %>
+    <div class="pairs">
+      <span>Unparseable (7d): <strong><%= deliveries[:unparseable][:count] %></strong>
+        <% if deliveries[:unparseable][:count].positive? %><%= link_to "view", admin_deliveries_path(status: "unparseable") %><% end %></span>
+      <span>Ignored (7d): <strong><%= deliveries[:ignored][:count] %></strong>
+        <% if deliveries[:ignored][:count].positive? %><%= link_to "view", admin_deliveries_path(status: "ignored") %><% end %></span>
+    </div>
+  </section>
+
+  <section class="card" id="outbound">
+    <h2>Outbound messages by status</h2>
+    <div class="pairs">
+      <% outbound[:by_status].each do |status, count| %>
+        <span class="<%= "muted" if count.zero? %>"><%= status.tr("_", " ") %>: <strong><%= count %></strong></span>
+      <% end %>
+    </div>
+  </section>
+
+  <section class="card" id="failed">
+    <h2>Failed sends by category</h2>
+    <% if outbound[:failed_by_category].empty? %>
+      <p class="muted">No failed messages.</p>
+    <% else %>
+      <ul>
+        <% outbound[:failed_by_category].sort.each do |category, count| %>
+          <li>
+            <strong><%= category %></strong>: <%= count %>
+            <% if Message::RESENDABLE_ERROR_CATEGORIES.include?(category) %>
+              <%= button_to "Resend all failed in #{category}", resend_failed_admin_messages_path(category: category), method: :post, class: "btn btn-warn", form_class: "inline" %>
+            <% else %>
+              <span class="muted">(resending would fail the same way)</span>
+            <% end %>
+          </li>
+        <% end %>
+      </ul>
+      <strong>Latest failures</strong>
+      <%= render "admin/health/message_list", listing: outbound[:failed], at: :failed_at %>
+    <% end %>
+  </section>
+
+  <section class="card" id="unknown">
+    <h2>Unknown outcome <span class="count">(<%= outbound[:unknown][:count] %>)</span></h2>
+    <p class="muted">The send may or may not have reached the customer; never resent automatically.</p>
+    <%= render "admin/health/message_list", listing: outbound[:unknown], at: :updated_at %>
+  </section>
+
+  <section class="card" id="undelivered">
+    <h2>Undelivered over 10 minutes <span class="count">(<%= outbound[:undelivered][:count] %>)</span></h2>
+    <p class="muted">Accepted by Meta, no delivery receipt yet.</p>
+    <%= render "admin/health/message_list", listing: outbound[:undelivered], at: :accepted_at %>
+  </section>
+
+  <section class="card" id="blocked">
+    <h2>Blocked by the 24h window <span class="count">(<%= outbound[:blocked][:count] %>)</span></h2>
+    <%= render "admin/health/message_list", listing: outbound[:blocked], at: :blocked_at %>
+  </section>
+
+  <section class="card" id="retry">
+    <h2>Retry scheduled <span class="count">(<%= outbound[:retry_scheduled][:count] %>)</span></h2>
+    <% if outbound[:retry_scheduled][:recent].empty? %>
+      <p class="muted">None.</p>
+    <% else %>
+      <ul>
+        <% outbound[:retry_scheduled][:recent].each do |message| %>
+          <li>
+            <%= link_to "message ##{message.id}", admin_conversation_path(message.conversation_id, anchor: "message-#{message.id}") %>
+            · next attempt <%= admin_time(message.next_attempt_at, seconds: true) %> (attempt <%= message.attempts %>)
+            <% if message.error_category.present? %>· <%= message.error_category %><% end %>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </section>
+
+  <section class="card" id="orders">
+    <h2>Orders needing review <span class="count">(<%= @snapshot[:orders][:needs_review][:count] %>)</span></h2>
+    <% if @snapshot[:orders][:needs_review][:recent].empty? %>
+      <p class="muted">None.</p>
+    <% else %>
+      <ul>
+        <% @snapshot[:orders][:needs_review][:recent].each do |order| %>
+          <li><%= link_to "order ##{order.id}", admin_order_path(order) %> · <%= cents_to_money(order.total_cents) %> · <%= ago(order.created_at) %></li>
+        <% end %>
+      </ul>
+      <p><%= link_to "All orders needing review", admin_orders_path(filter: "needs_review") %></p>
+    <% end %>
+  </section>
+
+  <section class="card" id="anomalies">
+    <h2>Orphans and anomalies (7d)</h2>
+    <div class="pairs">
+      <span>Orphan statuses: <strong><%= @snapshot[:anomalies][:orphan_items] %></strong></span>
+      <span>Anomalies: <strong><%= @snapshot[:anomalies][:anomaly_items] %></strong></span>
+    </div>
+    <p class="muted">An orphan is a status for a message we do not know; an anomaly contradicts what we know (a failure after delivery).</p>
+    <%= render "admin/health/delivery_list", listing: @snapshot[:anomalies][:deliveries], replay: true %>
+  </section>
+
+  <section class="card" id="queue">
+    <h2>Background jobs</h2>
+    <div class="bar">
+      <span class="big <%= @snapshot[:queue][:failed_executions].positive? ? 'bad' : 'ok' %>"><%= @snapshot[:queue][:failed_executions] %></span>
+      <span>failed jobs</span>
+    </div>
+  </section>
+
+  <section class="card" id="catalog">
+    <h2>Catalog sync</h2>
+    <% unless @catalog_enabled %>
+      <p><%= badge("sync disabled", "neutral") %> <span class="muted">CATALOG_SYNC_ENABLED is off; the CSV feed is the source.</span></p>
+    <% end %>
+    <dl class="kv">
+      <dt>Last push</dt>
+      <dd>
+        <% if @catalog.last_push_run %>
+          <%= badge(@catalog.last_push_run.status, { "succeeded" => "ok", "failed" => "bad", "partially_failed" => "warn" }.fetch(@catalog.last_push_run.status, "info")) %>
+          <%= ago(@catalog.last_push_run.finished_at || @catalog.last_push_run.created_at) %>
+          <% if @catalog.last_push_run.error_message.present? %><br><span class="muted"><%= scrub_ids(@catalog.last_push_run.error_message) %></span><% end %>
+        <% else %>never<% end %>
+      </dd>
+      <dt>Last reconcile</dt>
+      <dd>
+        <% if @catalog.last_reconcile_run %>
+          <%= badge(@catalog.last_reconcile_run.status, { "succeeded" => "ok", "failed" => "bad" }.fetch(@catalog.last_reconcile_run.status, "info")) %>
+          <%= ago(@catalog.last_reconcile_run.finished_at || @catalog.last_reconcile_run.created_at) %>
+          <% if @catalog.last_reconcile_run.error_message.present? %><br><span class="muted"><%= scrub_ids(@catalog.last_reconcile_run.error_message) %></span><% end %>
+        <% else %>never<% end %>
+      </dd>
+      <dt>Unsynced products</dt><dd><%= @catalog.dirty_count %></dd>
+      <dt>Drift</dt><dd><%= @catalog.drift_count %><% if @pending_drift.positive? %> <span class="muted">(+<%= @pending_drift %> waiting on a push)</span><% end %></dd>
+    </dl>
+    <% if @drift.any? %>
+      <ul>
+        <% @drift.each do |item| %>
+          <li><strong><%= item["sku"] %></strong> <%= item["type"].to_s.tr("_", " ") %>
+            <% if item["local"] || item["remote"] %>: ours <code><%= scrub_ids(item["local"]) %></code>, Meta <code><%= scrub_ids(item["remote"]) %></code><% end %></li>
+        <% end %>
+      </ul>
+      <% if @catalog.drift_count > @drift.size %><p class="muted">Showing <%= @drift.size %> of <%= @catalog.drift_count %>.</p><% end %>
+    <% end %>
+    <% if @catalog.failing_products.any? %>
+      <strong>Failing products (<%= @catalog.failing_products.size %>)</strong>
+      <ul>
+        <% @catalog.failing_products.first(10).each do |product| %>
+          <li><%= link_to product.sku, admin_products_path(anchor: "product-#{product.id}") %> <%= product.name %>: <span class="muted"><%= scrub_ids(product.catalog_sync_error).truncate(160) %></span></li>
+        <% end %>
+      </ul>
+    <% end %>
+    <div class="msg-actions">
+      <%= button_to "Sync now", sync_now_admin_catalog_path, method: :post, class: "btn btn-primary", form_class: "inline" %>
+      <%= button_to "Reconcile now", reconcile_now_admin_catalog_path, method: :post, class: "btn", form_class: "inline" %>
+    </div>
+  </section>
+</div>

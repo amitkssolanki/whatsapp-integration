@@ -1,0 +1,16 @@
+<%# locals: listing ({count, recent}), at (timestamp attribute to show), empty %>
+<% if listing[:recent].empty? %>
+  <p class="muted"><%= local_assigns.fetch(:empty, "None.") %></p>
+<% else %>
+  <ul>
+    <% listing[:recent].each do |message| %>
+      <li>
+        <%= link_to "message ##{message.id}", admin_conversation_path(message.conversation_id, anchor: "message-#{message.id}") %>
+        · <%= message.purpose.to_s.tr("_", " ").presence || message.message_type %>
+        · <%= message_state(message) %>
+        · <%= ago(message.public_send(at)) %>
+      </li>
+    <% end %>
+  </ul>
+  <% if listing[:count] > listing[:recent].size %><p class="muted">Showing <%= listing[:recent].size %> of <%= listing[:count] %>.</p><% end %>
+<% end %>
