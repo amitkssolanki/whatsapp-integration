@@ -1,11 +1,12 @@
 module Ops
   # What was labeled as injected in the period (a fault toggle fired, or a
   # captured body was re-posted), by label. The rows themselves are excluded
-  # from the `real` sections; this says how much there was.
+  # from the `real` sections; this says how much there was. Synthetic and
+  # simulated rows are not counted here at all: their faults are scripted.
   class InjectedSection
     def initialize(period)
-      @deliveries = WebhookDelivery.where(received_at: period)
-      @messages = Message.outbound.where(created_at: period)
+      @deliveries = WebhookDelivery.non_synthetic.where(received_at: period)
+      @messages = Message.outbound.where(created_at: period).where.not(conversation_id: Scopes.demo_conversations)
     end
 
     def call

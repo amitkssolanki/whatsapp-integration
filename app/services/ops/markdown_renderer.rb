@@ -22,7 +22,7 @@ module Ops
       lines = [ "# Operations report", "", "Period: #{period[:from]} to #{period[:to]} (end exclusive)  ",
                 "Generated: #{period[:generated_at]}, commit #{period[:git_sha]}", "",
                 "Quote the **Real** sections for platform behavior: rows with an injected fault or a re-posted body, and " \
-                "simulated demo customers, are left out of them. **All** counts every row. Latency is from real rows only.", "" ]
+                "synthetic or simulated demo data (customers, their messages and orders, flagged deliveries), are left out of them. **All** counts every row. Latency is from real rows only.", "" ]
       section_lines(lines, "Real", @data.fetch(:real))
       section_lines(lines, "All (injected and simulated rows included)", @data.fetch(:all).except(:latency))
       table(lines, "Injected and re-posted rows", @data.fetch(:injected), nil)
