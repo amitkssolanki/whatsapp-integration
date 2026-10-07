@@ -80,7 +80,7 @@ Place order** (`03-cart.png`). No message is sent and no Meta traffic is created
 **Crop out or cover** anything that shows a phone number, a `wa.me` link or any ids (business, catalog or product ids), and
 also notifications, the status bar and your own name or number. Each screenshot should show only the business name, the
 catalog, the product and the cart. Look at each PNG at full size before running. The video labels this card "Real WhatsApp
-captures · cart not sent".
+captures · 7 Oct 2026" (plus an optional fourth capture, 04-order-sent.png, if the order was placed: that one is real traffic).
 
 ## Run
 

@@ -117,9 +117,10 @@ elif [ "$CAPTURES_OK" = 0 ]; then
 STOPPED: the fresh WhatsApp captures are not there yet. This is the one step that needs you.
 
 On your phone, open the WhatsApp chat with The Local Table (the demo business number). Do NOT send a message or place an
-order. Tap the catalog/shop icon in the chat header → screenshot the catalog list (01-catalog.png). Tap Classic Lasagne →
+order unless you mean to. Tap the catalog/shop icon in the chat header → screenshot the catalog list (01-catalog.png). Tap Classic Lasagne →
 screenshot the product page (02-product.png). Add 2 × Classic Lasagne, 1 × Baked Salmon with Fennel & Tomatoes, 2 × Apple
-Berry Smoothie, open the cart → screenshot the cart WITHOUT tapping Place order (03-cart.png). Save the three PNGs to
+Berry Smoothie, open the cart → screenshot the cart (03-cart.png). Optional: if you choose to place the order (that is real
+traffic: a real order in production), screenshot the chat with the sent cart and receipt (04-order-sent.png). Save the PNGs to
   $CAPTURES/
 Before saving, CROP OUT or COVER anything that shows a phone number, a wa.me link, or any ids (business, catalog or product
 ids), plus notifications, the status bar and your own name or number. Each screenshot should show only the business name, the

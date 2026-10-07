@@ -24,11 +24,11 @@ const seg01 = {
 const seg02 = {
   async preroll(rt) {
     await rt.card(rt.placeholder ? '03-whatsapp-placeholder.html' : '03-whatsapp.html');
-    if (!rt.placeholder) await rt.setLabel('Real WhatsApp captures · cart not sent', 'real');
+    if (!rt.placeholder) await rt.setLabel('Real WhatsApp captures · 7 Oct 2026', 'real');
   },
   async run(rt) {
     const { page } = rt;
-    await rt.beat('b03-whatsapp', async () => { await rt.see(rt.placeholder ? 'capture pending' : 'Fresh captures of the live WhatsApp catalog'); });
+    await rt.beat('b03-whatsapp', async () => { await rt.see(rt.placeholder ? 'capture pending' : 'Real WhatsApp captures'); });
     await rt.beat('b04-conversation', async (b) => {
       await rt.goto('/admin/conversations');
       await rt.see('Maya Fernandes');

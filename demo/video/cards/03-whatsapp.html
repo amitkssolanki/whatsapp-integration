@@ -1,17 +1,21 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><title>WhatsApp side</title><link rel="stylesheet" href="card.css">
 <style>
- body { padding:34px 96px 28px; }
- h1 { font-size:32px; line-height:1.2; margin:0 0 2px; }
- .row { display:flex; gap:56px; justify-content:center; margin-top:18px; }
+ body { padding:34px 72px 28px; }
+ h1 { font-size:30px; line-height:1.2; margin:0 0 2px; }
+ .sub { font-size:20px; color:var(--muted); margin:0; }
+ .row { display:flex; gap:34px; justify-content:center; margin-top:16px; }
  figure { margin:0; text-align:center; }
- img { height:590px; width:auto; max-width:420px; object-fit:contain; border-radius:22px; border:1px solid var(--border); box-shadow:0 6px 22px rgba(0,0,0,.12); display:block; }
- figcaption { margin-top:10px; font-size:22px; color:var(--muted); }
+ img { height:570px; width:auto; max-width:300px; object-fit:contain; border-radius:20px; border:1px solid var(--border); box-shadow:0 6px 22px rgba(0,0,0,.12); display:block; }
+ figcaption { margin-top:10px; font-size:20px; color:var(--muted); }
 </style></head>
 <body>
-<h1>Fresh captures of the live WhatsApp catalog and cart &middot; cart not sent</h1>
+<h1>Real WhatsApp captures &middot; the live catalog and cart</h1>
+<p class="sub">Captured on the author's phone, 7 Oct 2026 (the author's own test order)</p>
 <div class="row">
  <figure><img src="../assets/whatsapp/01-catalog.png" alt=""><figcaption>The catalog inside WhatsApp</figcaption></figure>
  <figure><img src="../assets/whatsapp/02-product.png" alt=""><figcaption>A product page</figcaption></figure>
- <figure><img src="../assets/whatsapp/03-cart.png" alt=""><figcaption>The cart (not sent)</figcaption></figure>
+ <figure><img src="../assets/whatsapp/03-cart.png" alt=""><figcaption>The cart</figcaption></figure>
+ <!-- Optional fourth capture: the chat after the cart was sent. Hidden if the file is absent. -->
+ <figure id="sent"><img src="../assets/whatsapp/04-order-sent.png" alt="" onerror="document.getElementById('sent').remove()"><figcaption>Sent, with the order receipt</figcaption></figure>
 </div>
 </body></html>
