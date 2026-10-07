@@ -1,40 +1,94 @@
 #!/usr/bin/env bash
 # Regenerates the demo videos end to end (see demo/video/README.md).
 #
-#   bin/demo [all|portfolio|upwork] [--skip-db] [--only <segment-id>] [--force-narration] [--placeholder-whatsapp]
-#     all (default)  both cuts: demo/video/out/whatsapp-commerce-v2-demo.mp4 (portfolio, ~90 s) and
+#   bin/demo [all|portfolio|upwork] [--skip-db] [--only <segment-id>] [--force-narration]
+#     all (default)  both cuts: demo/video/out/whatsapp-commerce-v2-demo.mp4 (portfolio, ~95 s) and
 #                    demo/video/out/whatsapp-commerce-v2-demo-upwork.mp4 (Upwork, must be <= 60 s)
-#   --only needs a single cut; --placeholder-whatsapp writes everything under demo/video/out/preview/, never the final names
+#     --only needs a single cut. No phone is needed: the approved recording is in demo/video/assets/whatsapp/.
+#   bin/demo capture-whatsapp   record the phone screen with scrcpy (the author operates the phone; nothing is sent)
 #
-# Exit codes: 0 done, 1 a prerequisite or step failed (incl. an Upwork cut over 60 s), 2 the WhatsApp captures are
-# missing (a human step).
+# Exit codes: 0 done, 1 a prerequisite or step failed (incl. an Upwork cut over 60 s), 2 the WhatsApp recording or
+# screenshot is missing or not the approved one, or the phone is not ready (a human step).
 # Never contacts Meta, never logs in anywhere, never touches a database other than whatsapp_integration_demo_video.
 set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VIDEO="$REPO/demo/video"
-OUT="$VIDEO/out"          # final outputs; --placeholder-whatsapp switches OUT to out/preview (set after option parsing)
+OUT="$VIDEO/out"          # final outputs (generated, not tracked)
 CAPTURES="$VIDEO/assets/whatsapp"
 DB_NAME="whatsapp_integration_demo_video"
 PORT=3021
 # Where the Kokoro narration venv is installed (the directory name is historical; see demo/video/README.md)
 KOKORO_VENV="$HOME/.cache/vrinda-tts/kokoro"
 NARRATION_SUBDIR="kokoro-af_heart-speed0.95"
-CAPTURE_FILES="00-chat-greeting.png 01-catalog.png 02-product.png 03-cart.png 04-order-sent.png"
+MOTION_EDL="$VIDEO/whatsapp-motion.json"   # cut points for the approved phone recording (tracked)
 
-CUT="all"; SKIP_DB=0; ONLY=""; FORCE_NARRATION=0; PLACEHOLDER=0
+CUT="all"; SKIP_DB=0; ONLY=""; FORCE_NARRATION=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    all|portfolio|upwork) CUT="$1" ;;
+    all|portfolio|upwork|capture-whatsapp) CUT="$1" ;;
     --skip-db) SKIP_DB=1 ;;
     --only) shift; ONLY="${1:-}"; [ -n "$ONLY" ] || { echo "--only needs a segment id (e.g. 03-lifecycle)" >&2; exit 1; } ;;
     --force-narration) FORCE_NARRATION=1 ;;
-    --placeholder-whatsapp) PLACEHOLDER=1 ;;
-    -h|--help) sed -n "2,12p" "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n "2,13p" "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option: $1 (see bin/demo --help)" >&2; exit 1 ;;
   esac
   shift
 done
+
+T0=$SECONDS
+step() { printf '\n==> %s\n' "$*"; }
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+timed() { printf '    (%ss)\n' "$((SECONDS - $1))"; }
+
+# ---------------------------------------------------------------------------------------------------------------
+# bin/demo capture-whatsapp: a separate, human-operated stage. scrcpy records the phone screen at native resolution while
+# the author taps through WhatsApp; it never injects input (--no-control) and nothing is sent. The raw file lands in
+# demo/video/out/android/; adopting it (copy into assets/whatsapp/ + a source with new cut points in whatsapp-motion.json)
+# is a deliberate step.
+if [ "$CUT" = capture-whatsapp ]; then
+  step "Capture: phone screen recording"
+  command -v adb >/dev/null 2>&1 || fail "adb is missing: brew install --cask android-platform-tools"
+  command -v scrcpy >/dev/null 2>&1 || fail "scrcpy is missing: brew install scrcpy"
+  if [ "$(adb get-state 2>/dev/null)" != device ]; then
+    cat >&2 <<EOF
+STOPPED: no authorised Android phone. On the phone:
+  1. Settings > About phone > tap Build number 7 times (enables Developer options).
+  2. Developer options > turn on USB debugging (leave "Show taps" and "Pointer location" off).
+  3. Turn on Do Not Disturb, so no notification appears in the recording.
+  4. Connect it to this Mac by USB and tap Allow on "Allow USB debugging?".
+Then run bin/demo capture-whatsapp again.
+EOF
+    exit 2
+  fi
+  if ! adb shell dumpsys window 2>/dev/null | grep -q "mCurrentFocus=.*com.whatsapp"; then
+    echo "STOPPED: WhatsApp is not on screen. Unlock the phone, open WhatsApp, open the chat with The Local Table, then run this again." >&2
+    exit 2
+  fi
+  mkdir -p "$OUT/android"
+  FILE="$OUT/android/raw-$(date +%Y%m%d-%H%M%S).mp4"
+  cat <<EOF
+Recording to ${FILE#"$REPO/"} (native resolution, up to 60 fps, HEVC 40 Mbit/s, at most 10 minutes).
+On the phone, at a calm pace:
+  1. stay on the chat ~3 s;  2. tap the shop/catalog icon, pause;  3. scroll slowly down and back up;
+  4. open Classic Lasagne, pause;  5. tap Add to order request;  6. go back, tap + on Apple Berry Smoothie;
+  7. open the cart, pause ~4 s.  Do NOT tap Place order or Send, and do not type in the chat.
+Press Ctrl+C here when done.
+EOF
+  trap ':' INT   # a handler, not "ignore": scrcpy keeps the default Ctrl+C behaviour and finishes the file
+  scrcpy --no-playback --no-control --no-audio --video-codec=h265 --video-bit-rate=40M --max-fps=60 --max-size=0 \
+    --time-limit=600 --record="$FILE" || true
+  trap - INT
+  ffprobe -v error -show_entries stream=width,height:format=duration -of compact "$FILE" || fail "the recording is not readable: $FILE"
+  cat <<EOF
+
+Recorded ${FILE#"$REPO/"}, sha256 $(shasum -a 256 "$FILE" | cut -c1-64).
+Review it (e.g. ffmpeg -i "$FILE" -vf fps=1/2,scale=126:280,tile=16x8 -frames:v 1 sheet.png). To use it, copy it into
+demo/video/assets/whatsapp/ and point a source in demo/video/whatsapp-motion.json at it, with its sha256 and new cut
+points (old cut points belong to the old recording; motion.mjs refuses to mix them).
+EOF
+  exit 0
+fi
 
 if [ "$CUT" = all ]; then CUTS="portfolio upwork"; else CUTS="$CUT"; fi
 if [ -n "$ONLY" ] && [ "$CUT" = all ]; then echo "--only needs a cut: bin/demo portfolio --only <segment> (or upwork)" >&2; exit 1; fi
@@ -43,14 +97,6 @@ beats_file() { if [ "$1" = upwork ]; then echo "$VIDEO/beats-upwork.json"; else 
 final_name() { if [ "$1" = upwork ]; then echo "whatsapp-commerce-v2-demo-upwork.mp4"; else echo "whatsapp-commerce-v2-demo.mp4"; fi; }
 narration_dir() { echo "$VIDEO/narration/$1/$NARRATION_SUBDIR"; }
 
-# A placeholder run never writes a final-named file: every artifact (video, scenes, logs, timing, captions, contact
-# sheet, thumbnail, timeline) goes under out/preview/.
-if [ "$PLACEHOLDER" = 1 ]; then OUT="$VIDEO/out/preview"; fi
-
-T0=$SECONDS
-step() { printf '\n==> %s\n' "$*"; }
-fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
-timed() { printf '    (%ss)\n' "$((SECONDS - $1))"; }
 
 # env_demo CMD...: run CMD with a hermetic environment for the recording database. Every key listed in .env.example
 # (Meta tokens and ids, the business number, the webhook verify/app secrets, the catalog id, the admin credentials, and any
@@ -116,36 +162,24 @@ fi
 echo "    ok"
 
 # ---------------------------------------------------------------------------------------------------------------
-step "(b) WhatsApp captures"
-mkdir -p "$CAPTURES"
-CAPTURES_OK=1
-for f in $CAPTURE_FILES; do
-  p="$CAPTURES/$f"
-  if [ ! -s "$p" ] || [ "$(head -c 4 "$p" | tail -c 3)" != "PNG" ]; then CAPTURES_OK=0; echo "    missing or not a PNG: demo/video/assets/whatsapp/$f"; fi
-done
-if [ "$PLACEHOLDER" = 1 ]; then
-  echo "    --placeholder-whatsapp: card (c) will be a marked placeholder; everything goes to demo/video/out/preview/ (never the final names)"
-elif [ "$CAPTURES_OK" = 0 ]; then
+step "(b) Real WhatsApp footage"
+# The approved phone recordings, each with the cut points made for it (whatsapp-motion.json). Never replaced by anything
+# else: if one is missing or is not the approved file, stop.
+FOOTAGE_OK=1
+while IFS='|' read -r name file sha; do
+  [ -n "$name" ] || continue
+  if [ ! -s "$VIDEO/$file" ]; then FOOTAGE_OK=0; echo "    missing: demo/video/$file ($name)"
+  elif [ "$(shasum -a 256 "$VIDEO/$file" | cut -c1-64)" != "$sha" ]; then FOOTAGE_OK=0; echo "    demo/video/$file is not the recording whatsapp-motion.json was cut for ($name)"
+  else echo "    ok: $name (sha256 ${sha:0:12}…)"; fi
+done < <(node -e "const s=require('$MOTION_EDL').sources;for(const [n,d] of Object.entries(s))console.log([n,d.file,d.sha256].join('|'))")
+if [ "$FOOTAGE_OK" = 0 ]; then
   cat >&2 <<EOF
 
-STOPPED: the WhatsApp captures are not there yet. This is the one step that needs you (see demo/video/README.md,
-"The one human step"). Screenshots from your own phone, at its native resolution (no upscaling), saved as PNG to
-  $CAPTURES/
-  00-chat-greeting.png  the chat after you send "Hi": your "Hi" and the catalog card
-  01-catalog.png        the catalog list (catalog/shop icon in the chat header)
-  02-product.png        the Classic Lasagne product page
-  03-cart.png           the cart: 2 x Classic Lasagne, 1 x Baked Salmon with Fennel & Tomatoes, 2 x Apple Berry Smoothie
-  04-order-sent.png     the chat after you place the order: the sent cart and the receipt
-Sending "Hi" and placing the order are real traffic to the production app (a real order you then accept or reject in
-the admin); nothing else is needed, and nothing is changed in Meta. Crop only the status bar (the top 135 px on a
-1260x2800 screen); the video shows fixed crops of each screenshot, so keep the same screens and layout. Look at each PNG
-for phone numbers, names or ids before running.
-
-Then run bin/demo again. (To test everything else first: bin/demo --placeholder-whatsapp)
+STOPPED: the real WhatsApp recordings are not in place (see demo/video/README.md, "The human steps"). Record them with
+bin/demo capture-whatsapp (you operate the phone), copy them into demo/video/assets/whatsapp/ under the names listed in
+demo/video/whatsapp-motion.json, and set their cut points and sha256 there.
 EOF
   exit 2
-else
-  echo "    ok (5 captures)"
 fi
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -194,6 +228,7 @@ done
 step "(e) Local app + recording"
 mkdir -p "$OUT"
 segments_of() { node -e "const p=require('$(beats_file "$1")');console.log(p.segments.map(s=>s.id).join(' '))"; }
+where_of() { node -e "const p=require('$(beats_file "$1")');console.log(p.segments.find(s=>s.id==='$2').where)"; }
 if [ -n "$ONLY" ]; then
   case " $(segments_of "$CUT") " in *" $ONLY "*) ;; *) fail "unknown segment '$ONLY' for $CUT (one of: $(segments_of "$CUT"))" ;; esac
 fi
@@ -232,17 +267,21 @@ for _ in $(seq 1 90); do
 done
 [ "$UP" = 1 ] || fail "the server did not come up in 90 s (see demo/video/out/server.log)"
 
-REC_ARGS=()
-[ "$PLACEHOLDER" = 1 ] && REC_ARGS+=(--placeholder-whatsapp)
 for c in $CUTS; do
   if [ -n "$ONLY" ]; then SEGS="$ONLY"; else SEGS="$(segments_of "$c")"; fi
   for seg in $SEGS; do
     t=$SECONDS
-    echo "    recording $c/$seg"
     log="$OUT/$c/record-$seg.log"
-    (cd "$VIDEO" && node record.mjs --cut "$c" --segment "$seg" --out "$OUT/$c/scenes" --durations "$(narration_dir "$c")/durations.json" \
-      --base-url "http://localhost:$PORT" ${REC_ARGS[@]+"${REC_ARGS[@]}"}) > "$log" 2>&1 \
-      || { tail -25 "$log" >&2; fail "recording $c/$seg failed (log: ${log#"$REPO/"})"; }
+    if [ "$(where_of "$c" "$seg")" = android ]; then
+      echo "    rendering $c/$seg from the phone recording"
+      (cd "$VIDEO" && node motion.mjs --cut "$c" --segment "$seg" --out "$OUT/$c/scenes" --durations "$(narration_dir "$c")/durations.json") > "$log" 2>&1 \
+        || { tail -25 "$log" >&2; fail "rendering $c/$seg failed (log: ${log#"$REPO/"})"; }
+    else
+      echo "    recording $c/$seg"
+      (cd "$VIDEO" && node record.mjs --cut "$c" --segment "$seg" --out "$OUT/$c/scenes" --durations "$(narration_dir "$c")/durations.json" \
+        --base-url "http://localhost:$PORT") > "$log" 2>&1 \
+        || { tail -25 "$log" >&2; fail "recording $c/$seg failed (log: ${log#"$REPO/"})"; }
+    fi
     grep -E "^(wrote|warnings|blocked)" "$log" | sed 's/^/      /'
     timed "$t"
   done
@@ -260,7 +299,7 @@ fi
 step "(f) Assemble, then timing index, captions, contact sheet, thumbnail"
 SUMMARY=""
 for c in $CUTS; do
-  if [ "$PLACEHOLDER" = 1 ]; then NAME="preview-$c.mp4"; else NAME="$(final_name "$c")"; fi
+  NAME="$(final_name "$c")"
   t=$SECONDS
   ruby "$VIDEO/assemble.rb" --beats "$(beats_file "$c")" --scenes "$OUT/$c/scenes" --narration "$(narration_dir "$c")" \
     --out "$OUT/$c" --final "$OUT/$NAME" || fail "assembly failed ($c)"
@@ -277,12 +316,11 @@ for c in $CUTS; do
 done
 
 # Every card rendered for review (out/cards/), plus the Upwork 4:3 project cover (out/upwork/cover-4x3.png)
-if [ "$PLACEHOLDER" = 0 ]; then (cd "$VIDEO" && node render-cards.mjs > /dev/null) || fail "card rendering failed"; fi
+(cd "$VIDEO" && node render-cards.mjs > /dev/null) || fail "card rendering failed"
 
 # ---------------------------------------------------------------------------------------------------------------
 echo
 echo "Done in $((SECONDS - T0)) s."
 printf '%s' "$SUMMARY"
 echo "  review files per cut in ${OUT#"$REPO/"}/<cut>/ (timing.md, captions.srt, contact-sheet.png, thumbnail.png, timeline.json, scenes/)"
-[ "$PLACEHOLDER" = 1 ] && echo "  NOTE: PLACEHOLDER previews in out/preview/ (missing captures shown as boxes; no final-named file was written)."
 exit 0

@@ -1,37 +1,47 @@
 {
-  "_about": "Portfolio cut (85-95 s) of the WhatsApp Commerce V2 video, built by bin/demo (see README.md). Spoken text is spelled out for speech; every claim traces to docs/evidence/PORTFOLIO_CLAIMS.md and the verification write-ups. Segment 02-demo shows SYNTHETIC data (a local database, same code, Meta replaced by an in-process fake): it opens with an 'Application demo · synthetic data' card and every local frame carries a small DEMO DATA tag. b03 shows the author's real WhatsApp screenshots (7 Oct 2026, shown as crops, never edited); b10-b11 are real verification evidence (6 Oct 2026). A beat's min_seconds keeps its picture on screen at least that long. Voice: Kokoro-82M af_heart at speed 0.95.",
+  "_about": "Portfolio cut (premium, ~90-95 s) of the WhatsApp Commerce V2 video, built by bin/demo (see README.md). Spoken text is spelled out for speech; every claim traces to docs/evidence/PORTFOLIO_CLAIMS.md and the verification write-ups. Segment 02-whatsapp is REAL: the author's own phone screen recordings of 7 Oct 2026 (catalog, product, cart; then Place order, the app's receipt and, after the operator accepted it in the admin, the confirmation of real order #11), rendered by motion.mjs from whatsapp-motion.json; the narration describes only what those frames show. Segment 03-demo is SYNTHETIC (a local database, same code, Meta replaced by an in-process fake): it opens with an 'Application demo · synthetic data' card and every local frame carries a small DEMO DATA tag. b13-b14 are real verification evidence (6 Oct 2026). min_seconds keeps a beat's picture at least that long. crf is the final encode quality (lower is better). Voice: Kokoro-82M af_heart at speed 0.95.",
   "cut": "portfolio",
   "output": "whatsapp-commerce-v2-demo.mp4",
+  "crf": 12,
   "segments": [
     {
       "id": "01-opening",
       "where": "cards",
       "beats": [
-        { "id": "b01-title", "visual": "title card", "text": "WhatsApp Commerce, version two.", "min_seconds": 3.6 },
-        { "id": "b02-v1", "visual": "V1 evidence card", "text": "Version one dropped every delivery status and hid its errors." },
-        { "id": "b03-whatsapp", "visual": "real WhatsApp screenshots (7 Oct 2026): Hi and catalog card; catalog and product; cart, sent cart and receipt", "text": "First, a real conversation. The customer says hi and gets a catalog card. They browse the catalog inside WhatsApp, build a cart and send it. A receipt comes straight back.", "min_seconds": 12.6 },
-        { "id": "b04-flow", "visual": "how it works: WhatsApp, webhook, persist, queue, process, order validation, reply and status tracking", "text": "Behind it, every webhook is verified, stored and acknowledged, then processed once in the background, and every reply is tracked.", "min_seconds": 10.0 }
+        {"id": "b01-title", "visual": "title card", "text": "WhatsApp Commerce, version two.", "min_seconds": 3.0},
+        {"id": "b02-v1", "visual": "V1 evidence card", "text": "Version one dropped every delivery status and hid its errors."}
       ]
     },
     {
-      "id": "02-demo",
+      "id": "02-whatsapp",
+      "where": "android",
+      "beats": [
+        {"id": "b03-whatsapp", "visual": "real phone recording: the chat, the catalog opening and scrolling", "text": "First, the real thing, recorded on the author's phone. The catalog opens right inside WhatsApp."},
+        {"id": "b04-product", "visual": "real phone recording: Classic Lasagne, Add to order request, back to the catalog, + Apple Berry Smoothie", "text": "Open the lasagne, add it to the cart, then go back for a smoothie."},
+        {"id": "b05-cart", "visual": "real phone recording: the cart, 2 items at catalog prices, estimated total", "text": "The cart shows both, at their catalog prices."},
+        {"id": "b06-order", "visual": "real phone recording: Place order, the chat with the sent cart, the app's receipt for order #11 arriving", "text": "Then place the order, and the app's receipt comes straight back: order number eleven."},
+        {"id": "b07-confirmed", "visual": "real phone recording: the confirmation for order #11 arriving after the operator accepted it", "text": "Once the operator accepts it, the confirmation arrives too."}
+      ]
+    },
+    {
+      "id": "03-demo",
       "where": "local",
       "beats": [
-        { "id": "b05-demo", "visual": "application demo card (synthetic data), then the operator's conversation view for the synthetic hero customer", "text": "Now the operator's view, with demo data: Maya says hi and sends her cart.", "min_seconds": 6.6 },
-        { "id": "b06-order", "visual": "order detail: lines, customer price vs catalog price, total", "text": "Each line is checked against the catalog price.", "min_seconds": 4.6 },
-        { "id": "b07-notice", "visual": "order accepted + notification sent, delivered, read timestamps", "text": "Once accepted, the reply is tracked by the statuses Meta sends back: sent, delivered, read." },
-        { "id": "b08-deliveries", "visual": "deliveries list + a delivery with a duplicate outcome", "text": "Duplicates are ignored, and stored deliveries can be replayed safely." },
-        { "id": "b09-health", "visual": "health page: failures by category, unknown outcome never resent", "text": "Failures stay visible, and an ambiguous send is never resent." }
+        {"id": "b08-flow", "visual": "how it works: WhatsApp, webhook, persist, queue, process, order validation, reply and status tracking", "text": "Behind it, every webhook is verified, stored and acknowledged, then processed once in the background, and every reply is tracked."},
+        {"id": "b09-demo", "visual": "application demo card (synthetic data), then the operator's conversation view for the synthetic hero customer", "text": "Now the operator's view, with demo data: Maya says hi and sends her cart.", "min_seconds": 5.2},
+        {"id": "b10-order", "visual": "order detail: lines, customer price vs catalog price, total", "text": "Each line is checked against the catalog price.", "min_seconds": 3.4},
+        {"id": "b11-notice", "visual": "order accepted + notification sent, delivered, read timestamps", "text": "Once accepted, the reply is tracked by the statuses Meta sends back: sent, delivered, read."},
+        {"id": "b12-health", "visual": "health page: failures by category, unknown outcome never resent", "text": "Failures stay visible, and an ambiguous send is never resent."}
       ]
     },
     {
-      "id": "03-evidence",
+      "id": "04-evidence",
       "where": "cards",
       "beats": [
-        { "id": "b10-real", "visual": "real Meta verification card (6 Oct 2026)", "text": "On October sixth it ran against real Meta traffic, and every delivery was applied once.", "min_seconds": 6.6 },
-        { "id": "b11-diagnosis", "visual": "131009 card: Meta's stored details, cause in the commerce settings, fixed in Meta", "text": "The first catalog card failed: error one three one, zero zero nine. Its stored details pointed to a commerce setting. Fixed by hand in Meta, the next message went through." },
-        { "id": "b12-engineering", "visual": "engineering verification card", "text": "Eleven hundred and twelve tests pass, with security scans in CI, and it's deployed over HTTPS with a tested restore." },
-        { "id": "b13-close", "visual": "closing card with the limits and the repository", "text": "That's WhatsApp Commerce, version two.", "min_seconds": 6.2 }
+        {"id": "b13-real", "visual": "real Meta verification card (6 Oct 2026)", "text": "On October sixth it ran against real Meta traffic, and every delivery was applied once."},
+        {"id": "b14-diagnosis", "visual": "131009 card: Meta's stored details, cause in the commerce settings, fixed in Meta", "text": "The first catalog card failed with error one three one, zero zero nine. Its stored details pointed to a commerce setting, fixed by hand in Meta."},
+        {"id": "b15-engineering", "visual": "engineering verification card", "text": "Eleven hundred and twelve tests pass, CI runs security scans, and it's deployed over HTTPS."},
+        {"id": "b16-close", "visual": "closing card: project, website, stack", "text": "WhatsApp Commerce, version two. More at amit solanki dot com.", "min_seconds": 5.5}
       ]
     }
   ]

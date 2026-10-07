@@ -1,31 +1,40 @@
 {
-  "_about": "Upwork Project Catalog cut (must be 60 s or less) of the WhatsApp Commerce V2 video, built by bin/demo upwork (see README.md). Client-oriented: what was built, the real WhatsApp interaction, how it works, the operator dashboard (SYNTHETIC demo data, introduced by the 'Application demo · synthetic data' card and tagged DEMO DATA on every local frame), real verification and deployment. No contact details, no URLs, no logos, no evidence file names, no claim of long-term production reliability. Voice: Kokoro-82M af_heart at speed 0.95.",
+  "_about": "Upwork Project Catalog cut (must be 60 s or less) of the WhatsApp Commerce V2 video, built by bin/demo upwork (see README.md). Client-oriented: what was built, the real WhatsApp interaction (the author's phone recordings: browsing, ordering, the app's receipt and confirmation; rendered by motion.mjs), how it works, the operator dashboard (SYNTHETIC demo data, introduced by the 'Application demo · synthetic data' card and tagged DEMO DATA on every local frame), real verification and deployment, a project closing card. No website, email, phone number or other contact details, no URLs, no third-party logos, no evidence file names, no claim of long-term production reliability. Voice: Kokoro-82M af_heart at speed 0.95.",
   "cut": "upwork",
   "output": "whatsapp-commerce-v2-demo-upwork.mp4",
+  "crf": 14,
   "max_seconds": 60,
   "segments": [
     {
-      "id": "u1-story",
+      "id": "u1-intro",
       "where": "cards",
       "beats": [
-        { "id": "u01-title", "visual": "what was built", "text": "Customers order from a catalog, right inside WhatsApp.", "min_seconds": 4.2 },
-        { "id": "u02-whatsapp", "visual": "real WhatsApp screenshots (7 Oct 2026)", "text": "Here's a real conversation. The customer says hi and gets the catalog. They browse it inside WhatsApp, build a cart and send it. A receipt comes straight back." },
-        { "id": "u03-flow", "visual": "how it works: webhook, persist, queue, process, validation, reply and status tracking", "text": "Behind it, every webhook is verified, stored and acknowledged fast, then processed once in the background. Orders are checked against the catalog, and every reply is tracked." }
+        {"id": "u01-title", "visual": "what was built", "text": "Customers order from a catalog, right inside WhatsApp.", "min_seconds": 3.8}
       ]
     },
     {
-      "id": "u2-dashboard",
+      "id": "u2-whatsapp",
+      "where": "android",
+      "beats": [
+        {"id": "u02-whatsapp", "visual": "real phone recording: chat, catalog", "text": "Here's the real thing, on the author's phone: the catalog, right inside WhatsApp."},
+        {"id": "u03-product", "visual": "real phone recording: + on Apple Berry Smoothie in the catalog, then the cart", "text": "Add a product, and the cart is ready, at catalog prices."},
+        {"id": "u04-order", "visual": "real phone recording: Place order, the app's receipt, the confirmation after the operator accepted it", "text": "Place the order: the receipt comes straight back, and the confirmation once it's accepted."}
+      ]
+    },
+    {
+      "id": "u3-dashboard",
       "where": "local",
       "beats": [
-        { "id": "u04-dashboard", "visual": "application demo card (synthetic data), order detail with reply statuses, health page", "text": "Here's the operator dashboard, with demo data: every order, each reply's delivery status, and anything that failed.", "min_seconds": 10.5 }
+        {"id": "u05-flow", "visual": "how it works", "text": "Behind it, every webhook is verified, stored and acknowledged fast, then processed once in the background, and every reply is tracked."},
+        {"id": "u06-dashboard", "visual": "application demo card (synthetic data), order detail with reply statuses, health page", "text": "Here's the operator dashboard, with demo data: every order, each reply's delivery status, and anything that failed.", "min_seconds": 9.5}
       ]
     },
     {
-      "id": "u3-close",
+      "id": "u4-close",
       "where": "cards",
       "beats": [
-        { "id": "u05-verified", "visual": "verified and deployed card", "text": "It's deployed over HTTPS, and was verified with real WhatsApp traffic, including a Meta error diagnosed from its stored details." },
-        { "id": "u06-close", "visual": "closing card", "text": "Ordering on WhatsApp, built to be operated.", "min_seconds": 3.6 }
+        {"id": "u07-verified", "visual": "verified and deployed card", "text": "It's deployed over HTTPS, and was verified with real WhatsApp traffic, including a Meta error diagnosed from its stored details."},
+        {"id": "u08-close", "visual": "closing card: project and stack", "text": "A WhatsApp commerce integration, built to be operated.", "min_seconds": 3.6}
       ]
     }
   ]

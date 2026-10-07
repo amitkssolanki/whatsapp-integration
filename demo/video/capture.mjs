@@ -5,7 +5,7 @@
 //               timings.
 //   playwright  Playwright's built-in recordVideo (VP8 webm at CSS-pixel size), converted to the same H.264 spec.
 //
-// Both end as H.264, 1920x1080, 30 fps constant, yuv420p, CRF 18, no audio. See README for the comparison evidence.
+// Both end as H.264, 1920x1080, 30 fps constant, yuv420p, CRF 12 (near-lossless for UI text), no audio. See README for the comparison evidence.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -24,7 +24,7 @@ export const FFMPEG = resolveBin('ffmpeg', 'FFMPEG');
 export const FFPROBE = resolveBin('ffprobe', 'FFPROBE');
 
 const X264 = [
-  '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-r', '30', '-fps_mode', 'cfr',
+  '-c:v', 'libx264', '-preset', 'slow', '-crf', '12', '-pix_fmt', 'yuv420p', '-r', '30', '-fps_mode', 'cfr',
   '-g', '60', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
   '-movflags', '+faststart', '-an',
 ];

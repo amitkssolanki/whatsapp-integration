@@ -2,7 +2,7 @@
 // Unattended recording of one segment of one cut (portfolio or upwork) of the WhatsApp Commerce V2 video.
 //
 //   node record.mjs --cut portfolio --segment 02-demo [--base-url http://localhost:3021] [--out out/portfolio/scenes]
-//        [--durations narration/portfolio/kokoro-af_heart-speed0.95/durations.json] [--pad 0.4] [--placeholder-whatsapp] [--keep-frames]
+//        [--durations narration/portfolio/kokoro-af_heart-speed0.95/durations.json] [--pad 0.4] [--keep-frames]
 //
 // Everything here is read-only: any non-GET request is aborted, and only two origins are reachable: the local app
 // (default http://localhost:3021, admin auth disabled, synthetic database) and file:// cards/assets under this directory.
@@ -29,7 +29,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 function parseArgs(argv) {
-  const o = { cut: 'portfolio', placeholder: false, baseUrl: 'http://localhost:3021', pad: 0.4, keepFrames: false };
+  const o = { cut: 'portfolio', baseUrl: 'http://localhost:3021', pad: 0.4, keepFrames: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]; const v = () => argv[++i];
     if (a === '--cut') o.cut = v();
@@ -39,7 +39,6 @@ function parseArgs(argv) {
     else if (a === '--durations') o.durations = v();
     else if (a === '--pad') o.pad = parseFloat(v());
     else if (a === '--keep-frames') o.keepFrames = true;
-    else if (a === '--placeholder-whatsapp') o.placeholder = true;
     else throw new Error(`unknown argument ${a}`);
   }
   if (!CUTS[o.cut]) throw new Error(`--cut must be one of ${Object.keys(CUTS).join(', ')}`);
@@ -113,8 +112,8 @@ const PAGE_INIT = ({ localOrigin }) => {
 
 // ---------------------------------------------------------------------------------------------------------------
 export class Runtime {
-  constructor({ page, capture, segment, narration, base, pad, placeholder }) {
-    Object.assign(this, { page, capture, segment, narration, base, pad, placeholder });
+  constructor({ page, capture, segment, narration, base, pad }) {
+    Object.assign(this, { page, capture, segment, narration, base, pad });
     this.pos = { x: 900, y: 420 };
     this.beats = [];
     this.warnings = [];
@@ -168,15 +167,6 @@ export class Runtime {
     if (this.cursorUsed) await this.page.mouse.move(this.pos.x, this.pos.y);
   }
   card(name) { return this.goto('file://' + path.join(ROOT, 'cards', name)); }
-  // The real WhatsApp screenshots card: waits until every crop is loaded; a missing capture fails the recording unless
-  // this is a --placeholder-whatsapp preview.
-  async whatsappCard() {
-    await this.card('03-whatsapp.html');
-    await this.page.waitForFunction(() => window.cropsReady(), null, { timeout: 10000 });
-    const missing = await this.page.evaluate(() => window.cropsMissing());
-    if (missing && !this.placeholder) throw new Error(`${missing} WhatsApp capture(s) missing in assets/whatsapp/`);
-    await this.page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-  }
   // The href of the "View" link in the list row containing `text`, looked up in a separate, unrecorded page.
   async lookupHref(listPath, text) {
     const p = await this.page.context().newPage();
@@ -325,7 +315,7 @@ async function main() {
   });
 
   const page = await ctx.newPage();
-  const rt = new Runtime({ page, capture, segment, narration, base: opts.baseUrl, pad: opts.pad, placeholder: opts.placeholder });
+  const rt = new Runtime({ page, capture, segment, narration, base: opts.baseUrl, pad: opts.pad });
   page.on('pageerror', (e) => rt.warnings.push(`page error: ${e.message.split('\n')[0]}`));
   page.on('response', (r) => { if (r.status() >= 400 && r.request().resourceType() === 'document') rt.warnings.push(`${r.status()} ${new URL(r.url()).host}${new URL(r.url()).pathname}`); });
 
@@ -350,8 +340,8 @@ async function main() {
   const duration = probeDuration(outFile);
   fs.writeFileSync(beatsFile, JSON.stringify({
     cut: opts.cut, segment: segment.id, video: path.basename(outFile), video_duration: +duration.toFixed(3),
-    spec: '1920x1080 H.264 30fps cfr yuv420p crf18 no audio', viewport: `${VIEWPORT.width}x${VIEWPORT.height}@${DSF}x`,
-    pad_seconds: opts.pad, blocked_hosts: [...blocked], placeholder_whatsapp: opts.placeholder, capture_stats: capture.stats ?? null, warnings: rt.warnings, beats: rt.beats,
+    spec: '1920x1080 H.264 30fps cfr yuv420p crf12 no audio', viewport: `${VIEWPORT.width}x${VIEWPORT.height}@${DSF}x`,
+    pad_seconds: opts.pad, blocked_hosts: [...blocked], capture_stats: capture.stats ?? null, warnings: rt.warnings, beats: rt.beats,
   }, null, 2) + '\n');
   log(`wrote ${path.relative(ROOT, outFile)} (${duration.toFixed(2)}s)`);
   if (rt.warnings.length) log(`warnings: ${[...new Set(rt.warnings)].join('; ')}`);

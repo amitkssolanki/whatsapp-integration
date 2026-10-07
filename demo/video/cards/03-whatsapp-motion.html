@@ -1,0 +1,45 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Real WhatsApp interaction</title><link rel="stylesheet" href="card.css">
+<!--
+  Background for the real WhatsApp section (rendered by motion.mjs to 1920x1080 PNGs). The phone recording is composited by ffmpeg into the empty panel on the right (840x1000 px at 1000,40 in the final frame = 630x750 CSS px at
+  750,30 here); this page only draws the frame around it and the text on the left.
+  Query: ?step=<n> highlights step n of ?steps=a|b|c (earlier steps shown done); ?sub= and ?note= set the two smaller lines.
+-->
+<style>
+ body { padding:0; display:block; }
+ .left { position:absolute; left:72px; top:0; bottom:0; width:610px; display:flex; flex-direction:column; justify-content:center; }
+ h1 { font-size:50px; line-height:1.1; margin:0 0 14px; }
+ .sub { font-size:25px; color:var(--muted); margin:0 0 54px; }
+ ol { list-style:none; margin:0; padding:0; display:grid; gap:22px; }
+ li { display:flex; align-items:center; gap:20px; font-size:34px; color:#a3a29b; font-weight:500; }
+ li::before { content:""; width:18px; height:18px; border-radius:50%; background:#d6d4cd; flex:none; }
+ li.done { color:var(--text); }
+ li.done::before { background:var(--accent); opacity:.45; }
+ li.on { color:var(--text); font-weight:700; }
+ li.on::before { background:var(--accent); box-shadow:0 0 0 7px rgba(31,138,76,.16); }
+ .note { position:absolute; left:72px; bottom:44px; font-size:19px; color:var(--muted); margin:0; }
+ .panel { position:absolute; left:750px; top:30px; width:630px; height:750px; border-radius:24px; background:#fff;
+   box-shadow:0 14px 40px rgba(0,0,0,.16), 0 0 0 1px rgba(0,0,0,.06); }
+</style></head>
+<body>
+<div class="left">
+ <h1>Real WhatsApp interaction</h1>
+ <p class="sub" id="sub"></p>
+ <ol id="steps"></ol>
+</div>
+<p class="note" id="note"></p>
+<div class="panel"></div>
+<script>
+ const q = new URLSearchParams(location.search);
+ const steps = (q.get('steps') || 'Chat|Catalog|Product|Cart').split('|');
+ const on = q.has('step') ? +q.get('step') : -1; // -1: every step lit (the screenshot)
+ document.getElementById('sub').textContent = q.get('sub') || '7 Oct 2026 · Author’s test account';
+ document.getElementById('note').textContent = q.get('note') || 'Screen recordings from the phone';
+ const ol = document.getElementById('steps');
+ steps.forEach((s, i) => {
+   const li = document.createElement('li');
+   li.textContent = s;
+   li.className = on < 0 ? 'on' : i < on ? 'done' : i === on ? 'on' : '';
+   ol.appendChild(li);
+ });
+</script>
+</body></html>

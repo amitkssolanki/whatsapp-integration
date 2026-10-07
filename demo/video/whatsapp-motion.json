@@ -1,0 +1,55 @@
+{
+  "_about": "Edit list for the real WhatsApp section, rendered by motion.mjs from the author's own phone screen recordings (bin/demo capture-whatsapp; approved copies in assets/whatsapp/, git-ignored), both made on 7 Oct 2026: 'browse' (chat -> catalog -> product -> cart, nothing sent) and 'order' (the same cart -> Place order -> the app's receipt -> the confirmation after the operator accepted order #11 in the admin). Times are seconds in each recording. Every clip plays at real speed; cuts only skip idle stretches and repeated scrolling (and, in 'order', a WhatsApp notification banner and a one-frame flash). y is the first row (of 2800) shown in the panel, which shows 1500 rows at 2/3 scale; [[t, y], ...] pans between rows (eased). Nothing inside a frame is edited. The cut points belong to these exact recordings: motion.mjs refuses to run if a file's SHA-256 differs (a new capture needs new cut points).",
+  "sources": {
+    "browse": { "file": "assets/whatsapp/motion-browse.mp4", "sha256": "cf3b161a537249b9e8a2f590882f04796f7c4ec3b5c6b38844d8a4952efcaf57" },
+    "order": { "file": "assets/whatsapp/motion-order.mp4", "sha256": "037a3d31a92e87b5e5ffafaced9540b140bbd745cec85f6de35275f45a39d8fa" }
+  },
+  "source_color_matrix": "bt601",
+  "recorded": "7 Oct 2026",
+  "panel": { "x": 1000, "y": 40, "width": 840, "height": 1000, "rows": 1500, "radius": 32 },
+  "steps": ["Chat", "Catalog", "Product", "Cart", "Order", "Receipt", "Confirmed"],
+  "note": "Screen recordings from the phone · real speed, trimmed",
+  "cuts": {
+    "portfolio": {
+      "b03-whatsapp": { "clips": [
+        { "src": "browse", "from": 83.85, "to": 85.85, "y": 135, "step": 0 },
+        { "src": "browse", "from": 88.0, "to": 92.6, "y": 135, "step": 1 }
+      ] },
+      "b04-product": { "clips": [
+        { "src": "browse", "from": 115.2, "to": 117.6, "y": [[115.6, 135], [116.3, 560]], "step": 2 },
+        { "src": "browse", "from": 122.1, "to": 124.6, "y": [[122.1, 560], [122.9, 1160]], "step": 2 },
+        { "src": "browse", "from": 130.5, "to": 131.4, "y": 135, "step": 1 },
+        { "src": "browse", "from": 137.3, "to": 138.8, "y": 135, "step": 1 }
+      ] },
+      "b05-cart": { "clips": [
+        { "src": "browse", "from": 142.6, "to": 146.4, "y": 135, "step": 3 }
+      ] },
+      "b06-order": { "clips": [
+        { "src": "order", "from": 29.9, "to": 33.48, "y": 1160, "step": 4 },
+        { "src": "order", "from": 33.48, "to": 35.6, "y": 140, "step": 4 },
+        { "src": "order", "from": 39.5, "to": 41.4, "y": 140, "step": 5 }
+      ] },
+      "b07-confirmed": { "clips": [
+        { "src": "order", "from": 47.2, "to": 48.4, "y": 140, "step": 5 },
+        { "src": "order", "from": 69.1, "to": 72.8, "y": 140, "step": 6 }
+      ] }
+    },
+    "upwork": {
+      "u02-whatsapp": { "clips": [
+        { "src": "browse", "from": 84.25, "to": 85.85, "y": 135, "step": 0 },
+        { "src": "browse", "from": 88.0, "to": 92.0, "y": 135, "step": 1 }
+      ] },
+      "u03-product": { "_note": "No product page here: it shows the app's own web address, and the Upwork cut carries no URLs.", "clips": [
+        { "src": "browse", "from": 130.5, "to": 131.4, "y": 135, "step": 1 },
+        { "src": "browse", "from": 137.0, "to": 138.8, "y": 135, "step": 1 },
+        { "src": "browse", "from": 142.6, "to": 145.8, "y": 135, "step": 3 }
+      ] },
+      "u04-order": { "clips": [
+        { "src": "order", "from": 30.4, "to": 33.48, "y": 1160, "step": 4 },
+        { "src": "order", "from": 33.48, "to": 34.6, "y": 140, "step": 4 },
+        { "src": "order", "from": 39.7, "to": 41.4, "y": 140, "step": 5 },
+        { "src": "order", "from": 69.1, "to": 71.9, "y": 140, "step": 6 }
+      ] }
+    }
+  }
+}

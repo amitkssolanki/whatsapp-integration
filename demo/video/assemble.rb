@@ -7,9 +7,9 @@
 # timeline), in the order of the beats file, and one WAV per beat from narrate.py. Each beat's narration starts LEAD
 # seconds after the beat starts on screen.
 #
-# Outputs: in --out, master-silent.mp4 (clean cuts, short fade in and out), narration.wav (the whole narration on the
+# Outputs: in --out, master-silent.mp4 (clean cuts, short fade in and out, CRF 10), narration.wav (the whole narration on the
 # video's timeline, -16 LUFS) and timeline.json (each beat's absolute start/end and narration start, used by finish.rb
-# for timing.md and captions.srt); the final video (H.264 1920x1080 CRF 20 + AAC 192k) at --final.
+# for timing.md and captions.srt); the final video (H.264 1920x1080 at the beats file's crf + AAC 256k) at --final.
 require "json"
 require "fileutils"
 require "optparse"
@@ -57,7 +57,7 @@ filter = "#{joined}concat=n=#{segments.size}:v=1:a=0,fade=t=in:st=0:d=#{FADE_IN}
          "fade=t=out:st=#{(total - FADE_OUT).round(3)}:d=#{FADE_OUT},format=yuv420p[v]"
 master = File.join(opts[:out], "master-silent.mp4")
 run("ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", filter, "-map", "[v]", "-c:v", "libx264", "-preset", "slow",
-    "-crf", "18", "-r", "30", "-movflags", "+faststart", master)
+    "-crf", "10", "-r", "30", "-movflags", "+faststart", master)
 puts "master-silent.mp4  #{duration(master).round(2)} s"
 
 # 2. The narration track: each beat's WAV at its beat's start (+ LEAD), per segment, then the segments in order.
@@ -86,10 +86,12 @@ narration = File.join(opts[:out], "narration.wav")
 run("ffmpeg", "-y", "-v", "error", *clips.flat_map { [ "-i", _1[0] ] }, "-filter_complex", mix, "-map", "[a]",
     "-ac", "1", "-c:a", "pcm_s24le", narration)
 
-# 3. The final video: the master re-encoded for delivery (H.264 CRF 20) with the narration (AAC 192k).
+# 3. The final video: the master re-encoded at the cut's crf, with the narration (AAC 256k).
 final = opts[:final]
+crf = plan.fetch("crf", 16).to_s # the cut's final quality: lower is sharper and larger (portfolio 12, Upwork 14)
 run("ffmpeg", "-y", "-v", "error", "-i", master, "-i", narration, "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-preset", "slow",
-    "-crf", "20", "-pix_fmt", "yuv420p", "-r", "30", "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-shortest", "-movflags", "+faststart", final)
+    "-crf", crf, "-pix_fmt", "yuv420p", "-r", "30", "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
+    "-color_range", "tv", "-c:a", "aac", "-b:a", "256k", "-ac", "2", "-shortest", "-movflags", "+faststart", final)
 # "video" is relative to --out, so the timeline never records an absolute local path
 video = Pathname.new(final).relative_path_from(Pathname.new(opts[:out])).to_s
 File.write(File.join(opts[:out], "timeline.json"), JSON.pretty_generate({ "cut" => plan["cut"], "video" => video, "duration" => duration(final).round(3), "beats" => timeline }) + "\n")

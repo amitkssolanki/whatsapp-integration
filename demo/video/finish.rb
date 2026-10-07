@@ -1,5 +1,6 @@
-# Review artefacts for one assembled cut, in its --out directory: timing.md, captions.srt (also copied next to the video
-# as <video>.srt), contact-sheet.png, thumbnail.png (and, with --frames, one frame per second in <out>/frames/).
+# Review artefacts for one assembled cut, in its --out directory: timing.md, captions.srt (a review file only, never
+# placed next to the video, where players would load it as subtitles), contact-sheet.png, thumbnail.png (and, with
+# --frames, one frame per second in <out>/frames/).
 #
 #   ruby demo/video/finish.rb --out out/portfolio [--frames]
 require "json"
@@ -65,7 +66,6 @@ beats.each do |b|
 end
 srt = cues.each_with_index.map { |(a, z, s), i| "#{i + 1}\n#{srt_time(a)} --> #{srt_time(z)}\n#{wrap(s)}\n" }.join("\n")
 File.write(File.join(opts[:out], "captions.srt"), srt)
-File.write(video.sub(/\.mp4\z/, ".srt"), srt)
 
 # contact-sheet.png: one labelled frame per beat (this ffmpeg build has no drawtext, so the labels are drawn in a page)
 run("node", File.join(HERE, "contact-sheet.mjs"), "--out", opts[:out])
