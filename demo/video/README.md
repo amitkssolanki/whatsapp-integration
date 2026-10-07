@@ -75,7 +75,8 @@ uv pip install --python ~/.cache/vrinda-tts/kokoro/bin/python "kokoro>=0.9.4" so
 **Do not send a message or place an order.** Tap the catalog/shop icon in the chat header and screenshot the catalog list
 (`01-catalog.png`). Tap Classic Lasagne and screenshot the product page (`02-product.png`). Add 2 × Classic Lasagne,
 1 × Baked Salmon with Fennel & Tomatoes and 2 × Apple Berry Smoothie, open the cart, and screenshot it **without tapping
-Place order** (`03-cart.png`). No message is sent and no Meta traffic is created.
+Place order** (`03-cart.png`). Up to this point no message is sent and no Meta traffic is created; placing the order
+is optional and is real traffic (see the fourth capture below).
 
 **Crop out or cover** anything that shows a phone number, a `wa.me` link or any ids (business, catalog or product ids), and
 also notifications, the status bar and your own name or number. Each screenshot should show only the business name, the
