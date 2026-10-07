@@ -45,7 +45,6 @@ module Demo
     HERO_ORDER = [ [ "MAI-006", 2 ], [ "MAI-004", 1 ], [ "BEV-002", 2 ] ].freeze
     # Used when the real menu is not loaded (the seed must work without it): synthetic DEMO-* items.
     HERO_ORDER_FALLBACK = [ [ "DEMO-AVAIL-1", 2 ], [ "DEMO-AVAIL-2", 1 ] ].freeze
-    HERO_NOTE = "Delivery around 7:30 please".freeze
     STATUS_GAPS = { "sent" => 2, "delivered" => 6, "read" => 140 }.freeze # seconds after the previous step
 
     PRODUCTS = [
@@ -179,7 +178,7 @@ module Demo
     def greeting_and_catalog_card(who)
       scenario("greeting", "Hi -> catalog card -> read") do
         start_at(96)
-        delivery = receive(text_body(who, "Hi! What's on the menu today?"))
+        delivery = receive(text_body(who, "Hi"))
         card = outbound(who, "greeting")
         progress(card, through: "read")
 
@@ -193,7 +192,7 @@ module Demo
       scenario("clean_order", "Clean order -> receipt delivered/read -> accepted -> notice read") do
         start_at(95)
         lines = hero_lines
-        delivery = receive(order_body(who, lines.map { |sku, quantity| line(sku, quantity) }, note: HERO_NOTE))
+        delivery = receive(order_body(who, lines.map { |sku, quantity| line(sku, quantity) }))
         order = order_of(delivery)
         receipt = outbound(who, "order_received")
         progress(receipt, through: "read")
@@ -205,8 +204,7 @@ module Demo
         progress(notice, through: "read")
 
         check("the order is clear (no validation issues)", order.reload.clear?)
-        check("the order has the designed lines and the customer's note",
-              order.order_items.order(:id).pluck(:product_retailer_id, :quantity) == lines && order.wa_order_note == HERO_NOTE)
+        check("the order has the designed lines", order.order_items.order(:id).pluck(:product_retailer_id, :quantity) == lines)
         check("the operator accepted it", accepted && order.accepted? && order.decided_by == OPERATOR)
         check("the receipt was read", receipt.reload.read?)
         check("the acceptance notice was read", notice.reload.read?)
@@ -395,16 +393,6 @@ module Demo
       skus = HERO_ORDER.map(&:first)
       real = Product.non_synthetic.in_stock.where(sku: skus).count == skus.size
       real ? HERO_ORDER : HERO_ORDER_FALLBACK
-    end
-
-    # The order body, with the customer's note (the order's `text`) when there is one.
-    def order_body(who, items, note: nil)
-      body = super(who, items)
-      return body unless note
-
-      payload = JSON.parse(body)
-      payload["entry"][0]["changes"][0]["value"]["messages"][0]["order"]["text"] = note
-      JSON.generate(payload)
     end
 
     # [sku, quantity, price in cents]: the catalog price unless `cents` says otherwise.

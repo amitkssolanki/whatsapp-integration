@@ -144,7 +144,7 @@ RSpec.describe Demo::IntegrationSeed do
   end
 
   describe "the hero scenario (customer 1, Maya Fernandes)" do
-    it "reads like a real interaction on the real menu: greeting, a three-line order with a note, receipt and notice delivered and read" do
+    it "mirrors the real interaction on the real menu: \"Hi\", a three-line cart without a note, receipt and notice delivered and read" do
       create_menu({ "MAI-006" => 1550, "MAI-004" => 1950, "BEV-002" => 500 })
       result = seed
 
@@ -155,7 +155,7 @@ RSpec.describe Demo::IntegrationSeed do
         [ [ "inbound", nil, "received" ], %w[outbound greeting read], [ "inbound", nil, "received" ],
           %w[outbound order_received read], %w[outbound order_accepted read] ]
       )
-      expect(messages.first.body).to eq("Hi! What's on the menu today?")
+      expect(messages.first.body).to eq("Hi")
       expect(messages.second.message_type).to eq("interactive")
 
       order = maya.orders.sole
@@ -166,7 +166,7 @@ RSpec.describe Demo::IntegrationSeed do
       expect(order.formatted_total).to eq("$60.50")
       expect(order).to be_accepted
       expect(order).to be_clear
-      expect(order.wa_order_note).to eq("Delivery around 7:30 please")
+      expect(order.wa_order_note).to be_blank
       expect(order.decided_by).to eq("demo-operator")
 
       %w[order_received order_accepted].each do |purpose|
