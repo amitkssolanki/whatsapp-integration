@@ -19,7 +19,7 @@ namespace :demo do
   task seed_integration: :environment do
     unless ENV["CONFIRM"] == "yes"
       abort "Refusing without CONFIRM=yes. Nothing was changed.\n" \
-            "This replaces ALL synthetic data (customers named \"Demo Customer N\", their conversations, messages and orders, synthetic deliveries and DEMO-* products) " \
+            "This replaces ALL synthetic data (synthetic-flagged customers, their conversations, messages and orders, synthetic deliveries and DEMO-* products) " \
             "with a fresh, fixed set; it never touches anything else and never contacts Meta.\n" \
             "Synthetic rows that would be removed first: #{Demo::SyntheticPurge.new.preview.inspect}"
     end
