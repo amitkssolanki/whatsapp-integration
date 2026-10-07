@@ -95,8 +95,8 @@ A fresh deployment has an empty operator UI. `bin/rails demo:seed_integration CO
 (run it inside the production app container; docs/deploy/RUNBOOK.md has the deployment commands)
 fills it with **clearly synthetic** data. It is safe next to the real Meta token, but it is
 not evidence: **never quote it, never screenshot it as if real, and never put it in the
-scenario log.** Everything it creates is flagged `synthetic` (customers named "Demo Customer N"
-with numbers in the fictional 1 555 010 xxxx range, deliveries, `sim.in.N` / `sim.out.N` message ids,
+scenario log.** Everything it creates is flagged `synthetic` (customers with invented names such as "Maya Fernandes"
+and the `synthetic` badge, with numbers in the fictional 1 555 010 xxxx range, deliveries, `sim.in.N` / `sim.out.N` message ids,
 DEMO-* products in the category "Demo items (synthetic)") and shows a "synthetic" badge in the admin.
 
 - **What it does.** Removes all earlier synthetic data, then plays 12 scenarios through the real
