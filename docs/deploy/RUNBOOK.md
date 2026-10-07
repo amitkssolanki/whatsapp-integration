@@ -120,7 +120,7 @@ rsync -a --ignore-existing root@IP:/var/backups/whatsapp-integration/ ~/backups/
 
 ```sh
 source ~/.config/whatsapp-demo/secrets.env
-kamal deploy                     # commit first; zero-downtime swap; migrations run on boot (db:prepare)
+kamal deploy                     # commit first; Kamal swaps containers behind the proxy; migrations run on boot (db:prepare)
 kamal rollback VERSION           # VERSION = git sha; list with: kamal app containers
 kamal logs                       # follow app logs (alias for app logs -f); JSON lines
 kamal app logs --since 30m --grep ERROR
@@ -150,14 +150,14 @@ corrupted data, restore a backup (section 4).
 |---|---|---|
 | `FAULT_INJECTION_ALLOWED` (default `"0"`) | `env.clear` in `config/deploy.yml` | edit, then redeploy |
 | `CATALOG_SYNC_ENABLED` (default `"false"`) | `env.clear` | edit, then redeploy |
-| `DEMO_MASK_PII` (default `"0"`) | `env.clear` | edit, then redeploy |
+| `DEMO_MASK_PII` (default `"1"` in `config/deploy.yml`: masking on in production since 2026-10-07) | `env.clear` | edit, then redeploy |
 | the fault toggles themselves (`processing:order`, `send:5xx`, `send:read_timeout_after_send`) | "Fault injection" panel on `/admin/health`, shown only when `FAULT_INJECTION_ALLOWED=1` | tick, confirm, Set: takes effect immediately, no redeploy; recorded with the operator's name |
 
 A redeploy restarts Puma and the Solid Queue that runs inside it, so any send in flight at
 that moment ends as `unknown`. Deploy when `/admin/health` shows `sending: 0` under outbound
 messages, and never during a scenario run. `FAULT_INJECT` must not be set in the container
 environment in production: the app refuses to boot with it (use the Health switch).
-A toggle fires for every matching event for every participant: switch on, run one scenario,
+If fault injection is ever used: a toggle fires for every matching event for every participant: switch on, run one scenario,
 switch off. Turn `FAULT_INJECTION_ALLOWED` back to `"0"` (redeploy) after the last scenario.
 
 ### Uptime monitor
@@ -229,10 +229,10 @@ New VPS after total loss: provision, update `DEPLOY_SERVER_IP` in the secrets fi
 latest off-host dump to the VPS, then follow the four steps above (the fresh database created by
 `kamal setup` is the "live" one that gets replaced).
 
-### Before the operating period (checklist)
+### Operational checklist
 
-- [ ] Restore drill above completed on the real VPS with a real dump, counts compared.
-- [ ] Cron line installed; one nightly dump seen in `/var/backups/whatsapp-integration/`.
+- [x] Restore drill above completed on the real VPS with a real dump, counts compared (2026-10-06).
+- [x] Cron line installed; one nightly dump seen in `/var/backups/whatsapp-integration/` (2026-10-07).
 - [ ] Heartbeat monitor alerting on a missed backup (stop cron once to prove it).
 - [ ] Off-host copy performed once; the copied dump restored on your laptop or the VPS.
 - [ ] `/up` monitor alerting (pause the app once to prove it).
@@ -245,7 +245,7 @@ Total: roughly USD 5-12 per month. Meta charges conversation fees separately.
 
 ## 6. Intentionally not included
 
-Kubernetes or any orchestrator; multiple hosts or zero-downtime across hosts; a managed
+Kubernetes or any orchestrator; multiple hosts or failover across hosts; a managed
 database (the accessory's single volume plus dumps is the whole durability story); a staging
 environment (`kamal config` plus the restore drill is the pre-flight); Redis or a cache store;
 email; a CDN or Cloudflare proxy; log shipping (Docker rotates 5 x 10 MB per container).

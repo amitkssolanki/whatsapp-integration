@@ -1,5 +1,12 @@
 # Schedule
 
+> **Not pursued (decision 2026-10-07).** The project was completed as a portfolio /
+> reference implementation. Real Meta/WhatsApp verification was performed successfully
+> ([verification session 1](../evidence/2026-10-06-verification-session-1.md)), but the
+> multi-week operating period planned here was intentionally not run: it was not needed for
+> the portfolio objective. This document is kept as part of the original validation plan.
+> No operating-period evidence or metrics exist, and none are claimed.
+
 Three weeks. **Day 1: TBD.** Day 1 is the day the first participant places their first
 order. Rounds run on days 1, 8 and 15; the days between are daily checks and natural
 traffic only. Rules, labels and scenario definitions are in [PROTOCOL.md](PROTOCOL.md);

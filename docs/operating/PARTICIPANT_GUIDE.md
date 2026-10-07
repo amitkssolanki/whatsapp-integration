@@ -1,5 +1,12 @@
 # Participant guide
 
+> **Not pursued (decision 2026-10-07).** The project was completed as a portfolio /
+> reference implementation. Real Meta/WhatsApp verification was performed successfully
+> ([verification session 1](../evidence/2026-10-06-verification-session-1.md)), but the
+> multi-week operating period planned here was intentionally not run: it was not needed for
+> the portfolio objective. This document is kept as part of the original validation plan.
+> No operating-period evidence or metrics exist, and none are claimed.
+
 Thank you for helping. This is a test of a WhatsApp ordering system for a pretend
 restaurant, "The Local Table". **Nothing is charged and no food will arrive.** You are
 helping us check that the system does what it should when real people use it.

@@ -1,12 +1,19 @@
 # Operating period protocol
 
+> **Not pursued (decision 2026-10-07).** The project was completed as a portfolio /
+> reference implementation. Real Meta/WhatsApp verification was performed successfully
+> ([verification session 1](../evidence/2026-10-06-verification-session-1.md)), but the
+> multi-week operating period planned here was intentionally not run: it was not needed for
+> the portfolio objective. This document is kept as part of the original validation plan.
+> No operating-period evidence or metrics exist, and none are claimed.
+
 Related: [PARTICIPANT_GUIDE.md](PARTICIPANT_GUIDE.md) (what participants are told),
 [OPERATOR_CHECKLIST.md](OPERATOR_CHECKLIST.md) (daily check, incidents, rounds, end of period),
 [SCHEDULE.md](SCHEDULE.md) (3-week plan, who acts per scenario), [EVIDENCE.md](EVIDENCE.md)
 (what is kept where, criteria check). Templates: [scenario-log-template.md](scenario-log-template.md),
 [daily-check-log-template.md](daily-check-log-template.md), [incident-template.md](incident-template.md).
 
-**Status:** Verification Session 1 completed 2026-10-06 (owner only). Operating period: not started.
+**Status:** Verification Session 1 completed 2026-10-06 (owner only). Operating period: not pursued (see the note above).
 
 The operating period exists to observe how the real platform behaves against V2's
 assumptions, and to show that V2 records the truth: **zero unexplained differences**

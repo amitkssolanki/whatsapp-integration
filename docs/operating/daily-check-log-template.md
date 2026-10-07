@@ -1,5 +1,7 @@
 # Daily check log
 
+> Not pursued (decision 2026-10-07): kept as part of the original validation plan; no operating period was run.
+
 One row per day of the operating period. Keep the filled copy in the private evidence
 archive as `daily-check-log.md`. A day with no check is recorded as "not done", never left
 out. Zeros are written as 0.

@@ -1,5 +1,7 @@
 # Incident note
 
+> Not pursued (decision 2026-10-07): kept as part of the original validation plan; no operating period was run.
+
 Filename in the private archive: `incident-YYYY-MM-DD-NN.md`.
 
 - **Time (UTC), start / end:**

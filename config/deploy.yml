@@ -64,10 +64,10 @@ env:
     RAILS_MAX_THREADS: "10"
     # Switches that need a REDEPLOY to change (it restarts Puma and the in-process Solid Queue,
     # which turns in-flight sends into `unknown`: deploy when /admin/health shows sending: 0).
-    # All three default to the safe side for the operating period.
-    FAULT_INJECTION_ALLOWED: "0" # "1" only for scenario runs 4, 6, 7; the toggles themselves are then switched on/off on /admin/health, no redeploy
+    # All three are set to the safe side.
+    FAULT_INJECTION_ALLOWED: "0" # "1" allows the fault-injection switches on /admin/health (no redeploy to toggle them)
     CATALOG_SYNC_ENABLED: "false" # "true" lets the app WRITE to the Meta catalog (push + scheduled reconcile)
-    DEMO_MASK_PII: "0" # "1" masks phone numbers and names in every admin view (for screenshots)
+    DEMO_MASK_PII: "1" # masks phone numbers and names in every admin view; on since the portfolio demo (2026-10-07)
   secret:
     - SECRET_KEY_BASE
     - WHATSAPP_INTEGRATION_DATABASE_PASSWORD
