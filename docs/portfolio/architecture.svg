@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 780" width="1200" height="780" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Architecture of the WhatsApp order channel</title>
+<desc id="d">Webhooks from Meta are verified, stored with a job in one PostgreSQL transaction, processed by Solid Queue, and answered through an outbound outbox and SendMessageJob; status webhooks return through the same intake.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#374151"/></marker><marker id="l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#B45309"/></marker></defs>
+<rect x="0" y="0" width="1200" height="780" rx="14" fill="#FFFFFF"/>
+<text x="30" y="30" font-size="18" font-weight="700" fill="#111827">The Local Table: WhatsApp order channel, V2 architecture</text>
+<rect x="130" y="56" width="440" height="34" rx="8" fill="#F3F4F6" stroke="#6B7280" stroke-width="1.5"/>
+<text x="350.0" y="78" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">WhatsApp customer</text>
+<rect x="130" y="110" width="440" height="40" rx="8" fill="#F3F4F6" stroke="#6B7280" stroke-width="1.5"/>
+<text x="350.0" y="126" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">Meta Cloud API</text>
+<text x="350.0" y="144" text-anchor="middle" font-size="12" fill="#374151">sends webhooks: messages, orders, statuses</text>
+<rect x="130" y="170" width="440" height="38" rx="8" fill="#EEF4FF" stroke="#2F5FC4" stroke-width="1.5"/>
+<text x="350.0" y="186" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">kamal-proxy: HTTPS (TLS)</text>
+<text x="350.0" y="202" text-anchor="middle" font-size="12" fill="#374151">POST /webhooks/whatsapp, body capped at 3 MB</text>
+<rect x="130" y="228" width="440" height="54" rx="8" fill="#EEF4FF" stroke="#2F5FC4" stroke-width="1.5"/>
+<text x="350.0" y="252" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">WebhookGuard + Webhooks::WhatsappController</text>
+<text x="350.0" y="268" text-anchor="middle" font-size="12" fill="#374151">413 / 401 before parsing; HMAC-SHA256 over the raw body</text>
+<rect x="130" y="302" width="440" height="54" rx="8" fill="#ECFDF5" stroke="#15803D" stroke-width="1.5"/>
+<text x="350.0" y="326" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">webhook_deliveries (raw body) + job row</text>
+<text x="350.0" y="342" text-anchor="middle" font-size="12" fill="#374151">one PostgreSQL transaction; failure returns 500</text>
+<rect x="130" y="376" width="440" height="46" rx="8" fill="#FFF7ED" stroke="#C2410C" stroke-width="1.5"/>
+<text x="350.0" y="396" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">Solid Queue: ProcessWebhookDeliveryJob</text>
+<text x="350.0" y="412" text-anchor="middle" font-size="12" fill="#374151">claim the delivery; one transaction per item</text>
+<rect x="130" y="442" width="440" height="46" rx="8" fill="#EEF4FF" stroke="#2F5FC4" stroke-width="1.5"/>
+<text x="350.0" y="462" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">MessageHandler · StatusHandler</text>
+<text x="350.0" y="478" text-anchor="middle" font-size="12" fill="#374151">unique Meta message id; forward-only status</text>
+<rect x="130" y="508" width="440" height="46" rx="8" fill="#EEF4FF" stroke="#2F5FC4" stroke-width="1.5"/>
+<text x="350.0" y="528" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">Conversations · Orders (validation) · Messages</text>
+<text x="350.0" y="544" text-anchor="middle" font-size="12" fill="#374151">orders always recorded; issues flag needs_review</text>
+<rect x="130" y="574" width="440" height="46" rx="8" fill="#ECFDF5" stroke="#15803D" stroke-width="1.5"/>
+<text x="350.0" y="594" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">Outbound outbox</text>
+<text x="350.0" y="610" text-anchor="middle" font-size="12" fill="#374151">pending row + idempotency key + job, atomic</text>
+<rect x="130" y="640" width="440" height="54" rx="8" fill="#FFF7ED" stroke="#C2410C" stroke-width="1.5"/>
+<text x="350.0" y="655" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">SendMessageJob</text>
+<text x="350.0" y="672" text-anchor="middle" font-size="12" fill="#374151">claim, 24h window guard, HTTP call outside any transaction</text>
+<text x="350.0" y="689" text-anchor="middle" font-size="12" fill="#374151">ambiguous result becomes unknown, never resent</text>
+<rect x="130" y="714" width="440" height="40" rx="8" fill="#F3F4F6" stroke="#6B7280" stroke-width="1.5"/>
+<text x="350.0" y="730" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">Meta Graph API: POST /messages</text>
+<text x="350.0" y="748" text-anchor="middle" font-size="12" fill="#374151">delivered to the customer</text>
+<path d="M350.0 90 V109" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="360.0" y="104.0" text-anchor="start" font-size="12" fill="#1F2937">text, catalog cart order</text>
+<path d="M350.0 150 V169" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="360.0" y="164.0" text-anchor="start" font-size="12" fill="#1F2937">HTTPS POST</text>
+<path d="M350.0 208 V227" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="360.0" y="222.0" text-anchor="start" font-size="12" fill="#1F2937">413 if over 3 MB</text>
+<path d="M350.0 282 V301" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="360.0" y="296.0" text-anchor="start" font-size="12" fill="#1F2937">valid signature only (else 401, not stored)</text>
+<path d="M350.0 356 V375" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="360.0" y="370.0" text-anchor="start" font-size="12" fill="#1F2937">committed: 200 to Meta</text>
+<path d="M350.0 422 V441" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="360.0" y="436.0" text-anchor="start" font-size="12" fill="#1F2937">claim</text>
+<path d="M350.0 488 V507" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="360.0" y="502.0" text-anchor="start" font-size="12" fill="#1F2937">dedupe, apply once</text>
+<path d="M350.0 554 V573" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="360.0" y="568.0" text-anchor="start" font-size="12" fill="#1F2937">decision + idempotency key</text>
+<path d="M350.0 620 V639" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="360.0" y="634.0" text-anchor="start" font-size="12" fill="#1F2937">job enqueued in the same transaction</text>
+<path d="M350.0 694 V713" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="360.0" y="708.0" text-anchor="start" font-size="12" fill="#1F2937">HTTPS, 3 s open / 10 s read timeout</text>
+<path d="M130 734 H70 V130 H129" fill="none" stroke="#B45309" stroke-width="1.8" stroke-dasharray="7 5" marker-end="url(#l)"/>
+<text transform="translate(54 430) rotate(-90)" text-anchor="middle" font-size="12" font-weight="700" fill="#92400E">status webhooks (sent, delivered, read, failed) re-enter the same intake</text>
+<rect x="640" y="50" width="340" height="112" rx="8" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.5"/>
+<text x="654" y="72" font-size="14" font-weight="700" fill="#111827">Catalog sync (off by default)</text>
+<text x="654" y="92" font-size="12" fill="#374151">Catalog API: items_batch push + status polling</text>
+<text x="654" y="109" font-size="12" fill="#374151">Reconcile: read-only drift check, never edits</text>
+<text x="654" y="126" font-size="12" fill="#374151">CSV feed /catalog/feed.csv: the fallback</text>
+<text x="654" y="143" font-size="12" fill="#374151">Live: read access verified; push not verified</text>
+<rect x="1020" y="92" width="140" height="56" rx="8" fill="#F3F4F6" stroke="#6B7280" stroke-width="1.5"/>
+<text x="1090.0" y="116" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">Meta Catalog</text>
+<text x="1090.0" y="134" text-anchor="middle" font-size="12" fill="#374151">Commerce Manager</text>
+<path d="M982 120 H1018" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="640" y="205" width="520" height="158" rx="8" fill="#ECFDF5" stroke="#15803D" stroke-width="1.5"/>
+<text x="654" y="227" font-size="14" font-weight="700" fill="#111827">PostgreSQL 17: one database</text>
+<text x="654" y="247" font-size="12" fill="#374151">App tables: webhook_deliveries · messages · orders ·</text>
+<text x="654" y="264" font-size="12" fill="#374151">conversations · customers · products · catalog_sync_runs · ops_settings</text>
+<text x="654" y="281" font-size="12" fill="#374151">Solid Queue tables: jobs, executions, failed executions</text>
+<text x="654" y="298" font-size="12" fill="#374151">Unique: messages.wa_message_id, messages.idempotency_key,</text>
+<text x="654" y="315" font-size="12" fill="#374151">orders.source_message_id</text>
+<path d="M810 162 V204" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="820" y="189" text-anchor="start" font-size="12" fill="#1F2937">products in, sync runs out</text>
+<path d="M570 329 H639" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="577" y="310" text-anchor="start" font-size="12" fill="#1F2937">INSERT +</text>
+<text x="577" y="323" text-anchor="start" font-size="12" fill="#1F2937">enqueue</text>
+<path d="M600 597 V345 H638" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<path d="M570 399.0 H600" stroke="#374151" stroke-width="1.8" fill="none"/>
+<circle cx="600" cy="399.0" r="3.5" fill="#374151"/>
+<path d="M570 465.0 H600" stroke="#374151" stroke-width="1.8" fill="none"/>
+<circle cx="600" cy="465.0" r="3.5" fill="#374151"/>
+<path d="M570 531.0 H600" stroke="#374151" stroke-width="1.8" fill="none"/>
+<circle cx="600" cy="531.0" r="3.5" fill="#374151"/>
+<path d="M570 597.0 H600" stroke="#374151" stroke-width="1.8" fill="none"/>
+<circle cx="600" cy="597.0" r="3.5" fill="#374151"/>
+<rect x="640" y="395" width="520" height="100" rx="8" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.5"/>
+<text x="654" y="417" font-size="14" font-weight="700" fill="#111827">Operator UI /admin (HTTP Basic, fail closed)</text>
+<text x="654" y="437" font-size="12" fill="#374151">Health · Orders · Conversations · Deliveries</text>
+<text x="654" y="454" font-size="12" fill="#374151">replay delivery · resend / requeue message · accept / reject order</text>
+<text x="654" y="471" font-size="12" fill="#374151">CSRF on every POST; PII masking switch</text>
+<path d="M1100 395 V364" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<text x="1090" y="386" text-anchor="end" font-size="12" fill="#1F2937">rows + jobs only, never calls Meta</text>
+<rect x="640" y="525" width="520" height="92" rx="8" fill="#FFF7ED" stroke="#C2410C" stroke-width="1.5"/>
+<text x="654" y="547" font-size="14" font-weight="700" fill="#111827">Recurring jobs (Solid Queue scheduler)</text>
+<text x="654" y="567" font-size="12" fill="#374151">StallSweeperJob every 5 min: re-enqueue lost jobs;</text>
+<text x="654" y="584" font-size="12" fill="#374151">stuck sending becomes unknown, never resent</text>
+<text x="654" y="601" font-size="12" fill="#374151">CatalogReconcileJob daily 03:00 (only when sync is on)</text>
+<path d="M640 571 H603" fill="none" stroke="#374151" stroke-width="1.8" marker-end="url(#a)"/>
+<rect x="640" y="640" width="520" height="99" rx="8" fill="#FFFFFF" stroke="#6B7280" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="654" y="662" font-size="14" font-weight="700" fill="#111827">Deployment: one shared VPS, Kamal 2, Docker</text>
+<text x="654" y="682" font-size="12" fill="#374151">kamal-proxy terminates TLS (Let's Encrypt)</text>
+<text x="654" y="699" font-size="12" fill="#374151">App container 768 MB: Puma + Solid Queue + Thruster</text>
+<text x="654" y="716" font-size="12" fill="#374151">Postgres accessory 256 MB; nightly pg_dump (cron) + restore drill</text>
+</svg>
