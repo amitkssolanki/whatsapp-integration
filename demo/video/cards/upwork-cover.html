@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Upwork cover</title><link rel="stylesheet" href="card.css">
+<!-- 4:3 project cover for the Upwork catalog (rendered at 1000x750 CSS px, 2x = 2000x1500). Uses one real WhatsApp
+     screenshot crop (the author's own test account); no logos, no contact details, no URL. -->
+<style>
+ html,body { width:1000px; height:750px; }
+ body { padding:56px 56px; flex-direction:row; align-items:center; gap:44px; }
+ .txt { flex:1; }
+ .txt h1 { font-size:58px; line-height:1.08; margin:0 0 18px; }
+ .txt p { font-size:25px; color:var(--muted); margin:0; line-height:1.4; }
+ .rule { margin:0 0 22px; }
+ .crop { flex:none; width:400px; height:calc(400px * 1420 / 1260); background:url("../assets/whatsapp/00-chat-greeting.png") 0 0 / 400px auto no-repeat;
+   border-radius:18px; border:1px solid var(--border); box-shadow:0 10px 30px rgba(0,0,0,.14); }
+</style></head>
+<body>
+<div class="txt">
+ <h1>Order inside WhatsApp</h1>
+ <hr class="rule">
+ <p>Catalog, cart and orders in the chat, with an operator dashboard that tracks every reply.</p>
+</div>
+<div class="crop"></div>
+</body></html>

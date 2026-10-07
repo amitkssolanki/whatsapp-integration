@@ -1,106 +1,37 @@
 {
-  "_about": "Narration beats for the WhatsApp Commerce V2 portfolio video (built by bin/demo; see README.md). Every claim traces to docs/evidence/PORTFOLIO_CLAIMS.md. Figures are spelled out for speech. Segments 02-04 show SYNTHETIC demo data (a local database, same code, Meta replaced by an in-process fake) and carry an on-screen label saying so; the first beat of segment 02 shows fresh phone captures of the live catalog and cart (nothing sent); segment 05 shows REAL verification evidence from 2026-10-06 as evidence cards (no live Meta traffic, no real customer data). Voice: Kokoro-82M af_heart at speed 0.95.",
+  "_about": "Portfolio cut (85-95 s) of the WhatsApp Commerce V2 video, built by bin/demo (see README.md). Spoken text is spelled out for speech; every claim traces to docs/evidence/PORTFOLIO_CLAIMS.md and the verification write-ups. Segment 02-demo shows SYNTHETIC data (a local database, same code, Meta replaced by an in-process fake): it opens with an 'Application demo · synthetic data' card and every local frame carries a small DEMO DATA tag. b03 shows the author's real WhatsApp screenshots (7 Oct 2026, shown as crops, never edited); b10-b11 are real verification evidence (6 Oct 2026). A beat's min_seconds keeps its picture on screen at least that long. Voice: Kokoro-82M af_heart at speed 0.95.",
+  "cut": "portfolio",
+  "output": "whatsapp-commerce-v2-demo.mp4",
   "segments": [
     {
       "id": "01-opening",
       "where": "cards",
       "beats": [
-        {
-          "id": "b01-title",
-          "visual": "title card",
-          "text": "WhatsApp Commerce, version two: a production-oriented reference implementation of ordering on WhatsApp."
-        },
-        {
-          "id": "b02-v1",
-          "visual": "V1 evidence card",
-          "text": "Version one's logs showed it dropped every delivery status and hid its errors. Version two is the rebuild."
-        }
+        { "id": "b01-title", "visual": "title card", "text": "WhatsApp Commerce, version two.", "min_seconds": 3.6 },
+        { "id": "b02-v1", "visual": "V1 evidence card", "text": "Version one dropped every delivery status and hid its errors." },
+        { "id": "b03-whatsapp", "visual": "real WhatsApp screenshots (7 Oct 2026): Hi and catalog card; catalog and product; cart, sent cart and receipt", "text": "First, a real conversation. The customer says hi and gets a catalog card. They browse the catalog inside WhatsApp, build a cart and send it. A receipt comes straight back.", "min_seconds": 12.6 },
+        { "id": "b04-flow", "visual": "how it works: WhatsApp, webhook, persist, queue, process, order validation, reply and status tracking", "text": "Behind it, every webhook is verified, stored and acknowledged, then processed once in the background, and every reply is tracked.", "min_seconds": 10.0 }
       ]
     },
     {
-      "id": "02-journey",
+      "id": "02-demo",
       "where": "local",
       "beats": [
-        {
-          "id": "b03-whatsapp",
-          "visual": "fresh phone captures of the live WhatsApp catalog and cart (labelled, cart not sent)",
-          "text": "A customer orders inside WhatsApp's own catalog."
-        },
-        {
-          "id": "b04-conversation",
-          "visual": "admin conversation of the synthetic hero customer",
-          "text": "This walkthrough uses invented demo data. Maya asks about the menu, gets the catalog, and sends her order."
-        }
+        { "id": "b05-demo", "visual": "application demo card (synthetic data), then the operator's conversation view for the synthetic hero customer", "text": "Now the operator's view, with demo data: Maya says hi and sends her cart.", "min_seconds": 6.6 },
+        { "id": "b06-order", "visual": "order detail: lines, customer price vs catalog price, total", "text": "Each line is checked against the catalog price.", "min_seconds": 4.6 },
+        { "id": "b07-notice", "visual": "order accepted + notification sent, delivered, read timestamps", "text": "Once accepted, the reply is tracked by the statuses Meta sends back: sent, delivered, read." },
+        { "id": "b08-deliveries", "visual": "deliveries list + a delivery with a duplicate outcome", "text": "Duplicates are ignored, and stored deliveries can be replayed safely." },
+        { "id": "b09-health", "visual": "health page: failures by category, unknown outcome never resent", "text": "Failures stay visible, and an ambiguous send is never resent." }
       ]
     },
     {
-      "id": "03-lifecycle",
-      "where": "local",
-      "beats": [
-        {
-          "id": "b05-order",
-          "visual": "order detail: lines, quantities, catalog prices, review clear",
-          "text": "Each webhook is verified and stored before it's processed, then applied once. The order is checked against the catalog."
-        },
-        {
-          "id": "b06-notice",
-          "visual": "order accepted + notification lifecycle timestamps",
-          "text": "Once accepted, the reply goes through an outbox, tracked by the statuses Meta sends back: sent, delivered, read."
-        },
-        {
-          "id": "b07-deliveries",
-          "visual": "deliveries list + a delivery with a duplicate outcome",
-          "text": "Every delivery is kept with its outcome, so duplicates are ignored and replays are safe."
-        }
-      ]
-    },
-    {
-      "id": "04-health",
-      "where": "local",
-      "beats": [
-        {
-          "id": "b08-health",
-          "visual": "Health page: failed by category, unknown, blocked, replayed",
-          "text": "Failures stay visible: an ambiguous send is never resent, and a closed twenty-four-hour window blocks instead of sending."
-        }
-      ]
-    },
-    {
-      "id": "05-real",
+      "id": "03-evidence",
       "where": "cards",
       "beats": [
-        {
-          "id": "b09-real",
-          "visual": "real verification evidence card (2026-10-06)",
-          "text": "On October sixth it ran against real Meta traffic. The first catalog card failed: error one three one, zero zero nine."
-        },
-        {
-          "id": "b10-diagnosis",
-          "visual": "131009 card: stored details, diagnosis, manual fix, next message",
-          "text": "Its stored details pointed at a commerce setting on the new number. Once that was fixed by hand in Meta, the next message, and a real order, went through."
-        }
-      ]
-    },
-    {
-      "id": "06-quality",
-      "where": "public+cards",
-      "beats": [
-        {
-          "id": "b11-quality",
-          "visual": "GitHub Actions (public) + architecture + quality callouts",
-          "text": "One thousand one hundred and eleven specs, green CI with Brakeman and bundler-audit, deployed over HTTPS with a tested restore."
-        }
-      ]
-    },
-    {
-      "id": "07-closing",
-      "where": "cards",
-      "beats": [
-        {
-          "id": "b12-close",
-          "visual": "closing card with limits",
-          "text": "Verified against real traffic. Not a claim of long-term production reliability."
-        }
+        { "id": "b10-real", "visual": "real Meta verification card (6 Oct 2026)", "text": "On October sixth it ran against real Meta traffic, and every delivery was applied once.", "min_seconds": 6.6 },
+        { "id": "b11-diagnosis", "visual": "131009 card: Meta's stored details, cause in the commerce settings, fixed in Meta", "text": "The first catalog card failed: error one three one, zero zero nine. Its stored details pointed to a commerce setting. Fixed by hand in Meta, the next message went through." },
+        { "id": "b12-engineering", "visual": "engineering verification card", "text": "Eleven hundred and twelve tests pass, with security scans in CI, and it's deployed over HTTPS with a tested restore." },
+        { "id": "b13-close", "visual": "closing card with the limits and the repository", "text": "That's WhatsApp Commerce, version two.", "min_seconds": 6.2 }
       ]
     }
   ]

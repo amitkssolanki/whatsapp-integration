@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# Regenerates the portfolio video end to end (see demo/video/README.md).
+# Regenerates the demo videos end to end (see demo/video/README.md).
 #
-#   bin/demo [--skip-db] [--only <segment-id>] [--force-narration] [--placeholder-whatsapp]
-#   (--placeholder-whatsapp writes everything under demo/video/out/preview/, never the final names)
+#   bin/demo [all|portfolio|upwork] [--skip-db] [--only <segment-id>] [--force-narration] [--placeholder-whatsapp]
+#     all (default)  both cuts: demo/video/out/whatsapp-commerce-v2-demo.mp4 (portfolio, ~90 s) and
+#                    demo/video/out/whatsapp-commerce-v2-demo-upwork.mp4 (Upwork, must be <= 60 s)
+#   --only needs a single cut; --placeholder-whatsapp writes everything under demo/video/out/preview/, never the final names
 #
-# Exit codes: 0 done, 1 a prerequisite or step failed, 2 the fresh WhatsApp captures are missing (a human step).
+# Exit codes: 0 done, 1 a prerequisite or step failed (incl. an Upwork cut over 60 s), 2 the WhatsApp captures are
+# missing (a human step).
 # Never contacts Meta, never logs in anywhere, never touches a database other than whatsapp_integration_demo_video.
 set -uo pipefail
 
@@ -16,21 +19,29 @@ DB_NAME="whatsapp_integration_demo_video"
 PORT=3021
 # Where the Kokoro narration venv is installed (the directory name is historical; see demo/video/README.md)
 KOKORO_VENV="$HOME/.cache/vrinda-tts/kokoro"
-NARRATION_DIR="$VIDEO/narration/kokoro-af_heart-speed0.95"
-FINAL_NAME="whatsapp-commerce-v2-demo.mp4"
+NARRATION_SUBDIR="kokoro-af_heart-speed0.95"
+CAPTURE_FILES="00-chat-greeting.png 01-catalog.png 02-product.png 03-cart.png 04-order-sent.png"
 
-SKIP_DB=0; ONLY=""; FORCE_NARRATION=0; PLACEHOLDER=0
+CUT="all"; SKIP_DB=0; ONLY=""; FORCE_NARRATION=0; PLACEHOLDER=0
 while [ $# -gt 0 ]; do
   case "$1" in
+    all|portfolio|upwork) CUT="$1" ;;
     --skip-db) SKIP_DB=1 ;;
     --only) shift; ONLY="${1:-}"; [ -n "$ONLY" ] || { echo "--only needs a segment id (e.g. 03-lifecycle)" >&2; exit 1; } ;;
     --force-narration) FORCE_NARRATION=1 ;;
     --placeholder-whatsapp) PLACEHOLDER=1 ;;
-    -h|--help) sed -n "2,9p" "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n "2,12p" "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown option: $1 (see bin/demo --help)" >&2; exit 1 ;;
   esac
   shift
 done
+
+if [ "$CUT" = all ]; then CUTS="portfolio upwork"; else CUTS="$CUT"; fi
+if [ -n "$ONLY" ] && [ "$CUT" = all ]; then echo "--only needs a cut: bin/demo portfolio --only <segment> (or upwork)" >&2; exit 1; fi
+# per cut: the narration script, and the final file name (written to $OUT)
+beats_file() { if [ "$1" = upwork ]; then echo "$VIDEO/beats-upwork.json"; else echo "$VIDEO/beats.json"; fi; }
+final_name() { if [ "$1" = upwork ]; then echo "whatsapp-commerce-v2-demo-upwork.mp4"; else echo "whatsapp-commerce-v2-demo.mp4"; fi; }
+narration_dir() { echo "$VIDEO/narration/$1/$NARRATION_SUBDIR"; }
 
 # A placeholder run never writes a final-named file: every artifact (video, scenes, logs, timing, captions, contact
 # sheet, thumbnail, timeline) goes under out/preview/.
@@ -77,10 +88,13 @@ if [ -z "$CHROMIUM" ] || [ ! -e "$CHROMIUM" ]; then
   (cd "$VIDEO" && npx playwright install chromium) || fail "could not install Chromium"
 fi
 
-NEED_NARRATION=0
-if [ "$FORCE_NARRATION" = 1 ] || [ ! -s "$NARRATION_DIR/durations.json" ] || [ "$VIDEO/beats.json" -nt "$NARRATION_DIR/durations.json" ]; then
-  NEED_NARRATION=1
-fi
+NEED_NARRATION=0; STALE_CUTS=""
+for c in $CUTS; do
+  d="$(narration_dir "$c")"
+  if [ "$FORCE_NARRATION" = 1 ] || [ ! -s "$d/durations.json" ] || [ "$(beats_file "$c")" -nt "$d/durations.json" ]; then
+    NEED_NARRATION=1; STALE_CUTS="$STALE_CUTS $c"
+  fi
+done
 if [ ! -x "$KOKORO_VENV/bin/python" ]; then
   if [ "$NEED_NARRATION" = 1 ]; then
     cat >&2 <<EOF
@@ -102,10 +116,10 @@ fi
 echo "    ok"
 
 # ---------------------------------------------------------------------------------------------------------------
-step "(b) Fresh WhatsApp captures"
+step "(b) WhatsApp captures"
 mkdir -p "$CAPTURES"
 CAPTURES_OK=1
-for f in 01-catalog.png 02-product.png 03-cart.png; do
+for f in $CAPTURE_FILES; do
   p="$CAPTURES/$f"
   if [ ! -s "$p" ] || [ "$(head -c 4 "$p" | tail -c 3)" != "PNG" ]; then CAPTURES_OK=0; echo "    missing or not a PNG: demo/video/assets/whatsapp/$f"; fi
 done
@@ -114,23 +128,24 @@ if [ "$PLACEHOLDER" = 1 ]; then
 elif [ "$CAPTURES_OK" = 0 ]; then
   cat >&2 <<EOF
 
-STOPPED: the fresh WhatsApp captures are not there yet. This is the one step that needs you.
-
-On your phone, open the WhatsApp chat with The Local Table (the demo business number). Do NOT send a message or place an
-order unless you mean to. Tap the catalog/shop icon in the chat header → screenshot the catalog list (01-catalog.png). Tap Classic Lasagne →
-screenshot the product page (02-product.png). Add 2 × Classic Lasagne, 1 × Baked Salmon with Fennel & Tomatoes, 2 × Apple
-Berry Smoothie, open the cart → screenshot the cart (03-cart.png). Optional: if you choose to place the order (that is real
-traffic: a real order in production), screenshot the chat with the sent cart and receipt (04-order-sent.png). Save the PNGs to
+STOPPED: the WhatsApp captures are not there yet. This is the one step that needs you (see demo/video/README.md,
+"The one human step"). Screenshots from your own phone, at its native resolution (no upscaling), saved as PNG to
   $CAPTURES/
-Before saving, CROP OUT or COVER anything that shows a phone number, a wa.me link, or any ids (business, catalog or product
-ids), plus notifications, the status bar and your own name or number. Each screenshot should show only the business name, the
-catalog, the product and the cart. No message is sent and no Meta traffic is created.
+  00-chat-greeting.png  the chat after you send "Hi": your "Hi" and the catalog card
+  01-catalog.png        the catalog list (catalog/shop icon in the chat header)
+  02-product.png        the Classic Lasagne product page
+  03-cart.png           the cart: 2 x Classic Lasagne, 1 x Baked Salmon with Fennel & Tomatoes, 2 x Apple Berry Smoothie
+  04-order-sent.png     the chat after you place the order: the sent cart and the receipt
+Sending "Hi" and placing the order are real traffic to the production app (a real order you then accept or reject in
+the admin); nothing else is needed, and nothing is changed in Meta. Crop only the status bar (the top 135 px on a
+1260x2800 screen); the video shows fixed crops of each screenshot, so keep the same screens and layout. Look at each PNG
+for phone numbers, names or ids before running.
 
 Then run bin/demo again. (To test everything else first: bin/demo --placeholder-whatsapp)
 EOF
   exit 2
 else
-  echo "    ok (3 captures)"
+  echo "    ok (5 captures)"
 fi
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -162,26 +177,31 @@ fi
 
 # ---------------------------------------------------------------------------------------------------------------
 step "(d) Narration"
-if [ "$NEED_NARRATION" = 1 ]; then
-  t=$SECONDS
-  HF_HUB_OFFLINE=1 "$KOKORO_VENV/bin/python" "$VIDEO/narrate.py" --backend kokoro --voice af_heart --speed 0.95 || fail "narration failed"
-  timed "$t"
-else
-  echo "    up to date (use --force-narration to regenerate)"
-fi
-[ -s "$NARRATION_DIR/durations.json" ] || fail "no narration durations at $NARRATION_DIR"
+for c in $CUTS; do
+  case " $STALE_CUTS " in
+    *" $c "*)
+      t=$SECONDS
+      echo "    $c"
+      HF_HUB_OFFLINE=1 "$KOKORO_VENV/bin/python" "$VIDEO/narrate.py" --backend kokoro --voice af_heart --speed 0.95 \
+        --beats "$(beats_file "$c")" --out "$VIDEO/narration/$c" || fail "narration failed ($c)"
+      timed "$t" ;;
+    *) echo "    $c: up to date (use --force-narration to regenerate)" ;;
+  esac
+  [ -s "$(narration_dir "$c")/durations.json" ] || fail "no narration durations at $(narration_dir "$c")"
+done
 
 # ---------------------------------------------------------------------------------------------------------------
 step "(e) Local app + recording"
 mkdir -p "$OUT"
-SEGMENTS="$(node -e "const p=require('$VIDEO/beats.json');console.log(p.segments.map(s=>s.id).join(' '))")"
+segments_of() { node -e "const p=require('$(beats_file "$1")');console.log(p.segments.map(s=>s.id).join(' '))"; }
 if [ -n "$ONLY" ]; then
-  case " $SEGMENTS " in *" $ONLY "*) SEGMENTS="$ONLY" ;; *) fail "unknown segment '$ONLY' (one of: $SEGMENTS)" ;; esac
-else
-  rm -rf "$OUT/scenes"
+  case " $(segments_of "$CUT") " in *" $ONLY "*) ;; *) fail "unknown segment '$ONLY' for $CUT (one of: $(segments_of "$CUT"))" ;; esac
 fi
-rm -rf "$OUT/.frames"
-mkdir -p "$OUT/scenes"
+for c in $CUTS; do
+  [ -z "$ONLY" ] && rm -rf "${OUT:?}/${c:?}/scenes"
+  rm -rf "${OUT:?}/${c:?}/.frames"
+  mkdir -p "$OUT/$c/scenes"
+done
 
 if lsof -ti "tcp:$PORT" >/dev/null 2>&1; then fail "port $PORT is in use; stop whatever is listening there"; fi
 SERVER_PID=""
@@ -214,43 +234,55 @@ done
 
 REC_ARGS=()
 [ "$PLACEHOLDER" = 1 ] && REC_ARGS+=(--placeholder-whatsapp)
-for seg in $SEGMENTS; do
-  t=$SECONDS
-  echo "    recording $seg"
-  (cd "$VIDEO" && node record.mjs --segment "$seg" --out "$OUT/scenes" --base-url "http://localhost:$PORT" ${REC_ARGS[@]+"${REC_ARGS[@]}"}) > "$OUT/record-$seg.log" 2>&1 \
-    || { tail -25 "$OUT/record-$seg.log" >&2; fail "recording $seg failed (log: demo/video/out/record-$seg.log)"; }
-  grep -E "^(wrote|warnings|blocked)" "$OUT/record-$seg.log" | sed 's/^/      /'
-  timed "$t"
+for c in $CUTS; do
+  if [ -n "$ONLY" ]; then SEGS="$ONLY"; else SEGS="$(segments_of "$c")"; fi
+  for seg in $SEGS; do
+    t=$SECONDS
+    echo "    recording $c/$seg"
+    log="$OUT/$c/record-$seg.log"
+    (cd "$VIDEO" && node record.mjs --cut "$c" --segment "$seg" --out "$OUT/$c/scenes" --durations "$(narration_dir "$c")/durations.json" \
+      --base-url "http://localhost:$PORT" ${REC_ARGS[@]+"${REC_ARGS[@]}"}) > "$log" 2>&1 \
+      || { tail -25 "$log" >&2; fail "recording $c/$seg failed (log: ${log#"$REPO/"})"; }
+    grep -E "^(wrote|warnings|blocked)" "$log" | sed 's/^/      /'
+    timed "$t"
+  done
 done
 cleanup; SERVER_PID=""
 
 if [ -n "$ONLY" ]; then
   echo
-  echo "Recorded only $ONLY: $OUT/scenes/$ONLY.mp4 (assembly skipped; run bin/demo --skip-db for the whole video)"
+  echo "Recorded only $ONLY: $OUT/$CUT/scenes/$ONLY.mp4 (assembly skipped; run bin/demo $CUT --skip-db for the whole video)"
   echo "Total $((SECONDS - T0)) s"
   exit 0
 fi
 
 # ---------------------------------------------------------------------------------------------------------------
-step "(f) Assemble"
-if [ "$PLACEHOLDER" = 1 ]; then NAME="preview-placeholder.mp4"; else NAME="$FINAL_NAME"; fi
-t=$SECONDS
-ruby "$VIDEO/assemble.rb" --scenes "$OUT/scenes" --narration "$NARRATION_DIR" --out "$OUT" --name "$NAME" || fail "assembly failed"
-timed "$t"
+step "(f) Assemble, then timing index, captions, contact sheet, thumbnail"
+SUMMARY=""
+for c in $CUTS; do
+  if [ "$PLACEHOLDER" = 1 ]; then NAME="preview-$c.mp4"; else NAME="$(final_name "$c")"; fi
+  t=$SECONDS
+  ruby "$VIDEO/assemble.rb" --beats "$(beats_file "$c")" --scenes "$OUT/$c/scenes" --narration "$(narration_dir "$c")" \
+    --out "$OUT/$c" --final "$OUT/$NAME" || fail "assembly failed ($c)"
+  ruby "$VIDEO/finish.rb" --out "$OUT/$c" || fail "finishing step failed ($c)"
+  rm -rf "${OUT:?}/${c:?}/.frames"
+  timed "$t"
+  FILE="$OUT/$NAME"
+  DUR="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$FILE")"
+  MAX="$(node -e "console.log(require('$(beats_file "$c")').max_seconds || '')")"
+  if [ -n "$MAX" ] && ! awk -v d="$DUR" -v m="$MAX" 'BEGIN { exit !(d <= m) }'; then
+    fail "$c cut is $DUR s, over its $MAX s limit (shorten beats-upwork.json)"
+  fi
+  SUMMARY="$SUMMARY$(printf '  %-10s %s  %.1f s  %s' "$c" "${FILE#"$REPO/"}" "$DUR" "$(du -h "$FILE" | cut -f1)")"$'\n'
+done
 
-step "(g) Timing index, captions, contact sheet, thumbnail"
-ruby "$VIDEO/finish.rb" --out "$OUT" || fail "finishing step failed"
-rm -rf "$OUT/.frames"
+# Every card rendered for review (out/cards/), plus the Upwork 4:3 project cover (out/upwork/cover-4x3.png)
+if [ "$PLACEHOLDER" = 0 ]; then (cd "$VIDEO" && node render-cards.mjs > /dev/null) || fail "card rendering failed"; fi
 
 # ---------------------------------------------------------------------------------------------------------------
-FILE="$OUT/$NAME"
-DUR="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$FILE")"
-SIZE="$(du -h "$FILE" | cut -f1)"
 echo
 echo "Done in $((SECONDS - T0)) s."
-echo "  video:     $FILE"
-printf '  duration:  %.1f s\n' "$DUR"
-echo "  size:      $SIZE"
-echo "  also in:   $OUT (timing.md, captions.srt, contact-sheet.png, thumbnail.png, timeline.json, scenes/)"
-[ "$PLACEHOLDER" = 1 ] && echo "  NOTE: this is a PLACEHOLDER preview in out/preview/ (card c is not real; no final-named file was written). Take the phone captures and run bin/demo for the final video."
+printf '%s' "$SUMMARY"
+echo "  review files per cut in ${OUT#"$REPO/"}/<cut>/ (timing.md, captions.srt, contact-sheet.png, thumbnail.png, timeline.json, scenes/)"
+[ "$PLACEHOLDER" = 1 ] && echo "  NOTE: PLACEHOLDER previews in out/preview/ (missing captures shown as boxes; no final-named file was written)."
 exit 0

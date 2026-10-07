@@ -1,20 +1,18 @@
 #!/usr/bin/env node
-// Unattended recording of one segment of the WhatsApp Commerce V2 portfolio video.
+// Unattended recording of one segment of one cut (portfolio or upwork) of the WhatsApp Commerce V2 video.
 //
-//   node record.mjs --segment 03-lifecycle [--base-url http://localhost:3021] [--out out/scenes]
-//        [--durations narration/kokoro-af_heart-speed0.95/durations.json] [--pad 0.4] [--placeholder-whatsapp] [--keep-frames]
+//   node record.mjs --cut portfolio --segment 02-demo [--base-url http://localhost:3021] [--out out/portfolio/scenes]
+//        [--durations narration/portfolio/kokoro-af_heart-speed0.95/durations.json] [--pad 0.4] [--placeholder-whatsapp] [--keep-frames]
 //
-// Everything here is read-only: any non-GET request is aborted, and only these origins are reachable:
-//   - the local app (default http://localhost:3021, admin auth disabled, synthetic database),
-//   - file:// cards from ./cards,
-//   - github.com (+ its asset hosts) for the public Actions page, opened without credentials.
+// Everything here is read-only: any non-GET request is aborted, and only two origins are reachable: the local app
+// (default http://localhost:3021, admin auth disabled, synthetic database) and file:// cards/assets under this directory.
 // Any other host is blocked. No credentials are typed or passed anywhere; no Meta/WhatsApp/Facebook host is reachable.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { CdpCapture, probeDuration } from './capture.mjs';
-import { SEGMENTS } from './segments.mjs';
+import { CUTS } from './segments.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = HERE;
@@ -23,18 +21,19 @@ export const ROOT = HERE;
 // 1080p; the 1440x810 cards are shown in this viewport at zoom 0.8 (same layout, same pixels).
 export const VIEWPORT = { width: 1152, height: 648 };
 export const DSF = 2.5;
-const ARCH_IMAGE = path.resolve(ROOT, '../../docs/portfolio/architecture.png');
-const ALLOWED_HOSTS = [/^github\.com$/, /(^|\.)githubassets\.com$/, /(^|\.)githubusercontent\.com$/];
+// Each beat's narration starts this long after the beat starts on screen (assemble.rb uses the same value).
+const LEAD = 0.25;
 
 const log = (...a) => console.log(a.join(' '));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 function parseArgs(argv) {
-  const o = { out: 'out/scenes', placeholder: false, baseUrl: 'http://localhost:3021', pad: 0.4, keepFrames: false, durations: 'narration/kokoro-af_heart-speed0.95/durations.json' };
+  const o = { cut: 'portfolio', placeholder: false, baseUrl: 'http://localhost:3021', pad: 0.4, keepFrames: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]; const v = () => argv[++i];
-    if (a === '--segment') o.segment = v();
+    if (a === '--cut') o.cut = v();
+    else if (a === '--segment') o.segment = v();
     else if (a === '--base-url') o.baseUrl = v().replace(/\/$/, '');
     else if (a === '--out') o.out = v();
     else if (a === '--durations') o.durations = v();
@@ -43,7 +42,11 @@ function parseArgs(argv) {
     else if (a === '--placeholder-whatsapp') o.placeholder = true;
     else throw new Error(`unknown argument ${a}`);
   }
-  if (!o.segment || !SEGMENTS[o.segment]) throw new Error(`--segment must be one of ${Object.keys(SEGMENTS).join(', ')}`);
+  if (!CUTS[o.cut]) throw new Error(`--cut must be one of ${Object.keys(CUTS).join(', ')}`);
+  const segs = CUTS[o.cut].segments;
+  if (!o.segment || !segs[o.segment]) throw new Error(`--segment must be one of ${Object.keys(segs).join(', ')}`);
+  o.out ??= `out/${o.cut}/scenes`;
+  o.durations ??= `narration/${o.cut}/kokoro-af_heart-speed0.95/durations.json`;
   const u = new URL(o.baseUrl);
   if (!['localhost', '127.0.0.1'].includes(u.hostname)) throw new Error('--base-url must be a localhost address');
   return o;
@@ -57,31 +60,30 @@ const PAGE_INIT = ({ localOrigin }) => {
   // cards are authored at 1440x810; the recording viewport is 1152x648
   const style = document.createElement('style');
   // Presentation only: cards appear with a hard cut (their CSS fade-in starts from off-white, which reads as a washed-out
-  // frame when a card follows another page), and the admin footer's "Signed in as <operator>" is hidden because the
-  // local operator name differs from the seeded "Accepted by demo-operator".
-  style.textContent = (isFile ? 'html{zoom:0.8} body{animation:none !important}' : '') + (isLocal ? 'body.admin{padding-bottom:64px !important} .admin-footer{display:none !important}' : '');
+  // frame when a card follows another page); on the local app, extra bottom padding lets any section scroll to the top,
+  // the admin footer's "Signed in as <operator>" is hidden
+  // (the local operator name differs from the seeded "Accepted by demo-operator"), and so are the per-record "synthetic"
+  // badges: the demo section opens with an "Application demo · synthetic data" card and every local frame carries the
+  // DEMO DATA tag below instead.
+  style.textContent = (isFile ? 'html{zoom:0.8} body{animation:none !important}' : '') +
+    (isLocal ? 'body.admin{padding-bottom:50vh !important} .admin-footer{display:none !important} .badge-synthetic{display:none !important}' : '');
   const addStyle = () => { if (document.head && !style.isConnected) document.head.appendChild(style); };
   addStyle();
   document.addEventListener('DOMContentLoaded', addStyle);
 
-  // persistent corner label (a caption bar along the bottom edge)
-  window.__recSetLabel = (text, tone) => {
-    let el = document.getElementById('__rec_label');
-    if (!text) { if (el) el.remove(); return; }
-    if (!el) { if (!document.documentElement) return; el = document.createElement('div'); el.id = '__rec_label'; el.setAttribute('aria-hidden', 'true'); document.documentElement.appendChild(el); }
-    const dot = tone === 'real' ? '#1f8a4c' : '#d9a21b';
-    el.style.cssText = ['position:fixed', 'left:0', 'right:0', 'bottom:0', 'height:34px', 'display:flex', 'align-items:center', 'justify-content:center', 'gap:10px',
-      'background:rgba(34,34,31,0.94)', 'color:#fff', 'font:600 15px -apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif', 'letter-spacing:.01em',
-      'z-index:2147483646', 'pointer-events:none', isFile ? 'zoom:1.25' : ''].join(';');
-    el.textContent = '';
-    const d = document.createElement('span');
-    d.style.cssText = `width:10px;height:10px;border-radius:50%;background:${dot};display:inline-block`;
-    el.appendChild(d); el.appendChild(document.createTextNode(text));
+  // A small, fixed DEMO DATA tag in the bottom-right corner of every local (synthetic) page.
+  const tag = () => {
+    if (!isLocal || document.getElementById('__rec_demo') || !document.documentElement) return;
+    const el = document.createElement('div');
+    el.id = '__rec_demo'; el.setAttribute('aria-hidden', 'true'); el.textContent = 'DEMO DATA';
+    el.style.cssText = ['position:fixed', 'right:14px', 'bottom:12px', 'padding:4px 10px 4px 22px', 'border-radius:999px', 'background:rgba(34,34,31,0.82)',
+      'color:#fff', 'font:700 11px -apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif', 'letter-spacing:.08em', 'z-index:2147483646',
+      'pointer-events:none', 'background-image:radial-gradient(circle at 11px 50%, #e0a91f 0 4px, transparent 4.5px)'].join(';');
+    document.documentElement.appendChild(el);
   };
-  const autoLabel = () => { if (isLocal) window.__recSetLabel('Synthetic demo data · same code · Meta replaced by an in-process fake', 'synthetic'); };
-  autoLabel();
-  new MutationObserver(() => { if (isLocal && !document.getElementById('__rec_label') && document.documentElement) autoLabel(); }).observe(document, { childList: true, subtree: false });
-  document.addEventListener('DOMContentLoaded', autoLabel);
+  tag();
+  new MutationObserver(tag).observe(document, { childList: true, subtree: false });
+  document.addEventListener('DOMContentLoaded', tag);
 
   // cursor dot (not on file:// cards)
   if (isFile) return;
@@ -130,9 +132,16 @@ export class Runtime {
     const startNode = this.now();
     const start = startNode - this.capture.originNode;
     log(`beat ${id}: start ${start.toFixed(2)}s (narration ${narr.toFixed(2)}s)`);
-    const b = { t0: startNode, narr, at: async (s) => { await this.hold(startNode + s - this.now()); } };
+    const at = async (s) => { await this.hold(startNode + s - this.now()); };
+    // word(w): when the narration reaches w, estimated from w's position in the beat's text
+    const word = async (w, dt = 0) => {
+      const i = def.text.indexOf(w);
+      if (i < 0) throw new Error(`beat ${id}: "${w}" is not in its narration`);
+      await at(LEAD + narr * (i / def.text.length) + dt);
+    };
+    const b = { t0: startNode, narr, at, word };
     await fn(b);
-    const minEnd = startNode + narr + this.pad;
+    const minEnd = startNode + Math.max(narr + this.pad, def.min_seconds ?? 0);
     const wait = minEnd - this.now();
     if (wait > 0) { await this.restCursor(); await this.hold(wait); }
     else this.warnings.push(`${id}: actions ran ${(-wait).toFixed(2)}s past narration+pad`);
@@ -159,7 +168,25 @@ export class Runtime {
     if (this.cursorUsed) await this.page.mouse.move(this.pos.x, this.pos.y);
   }
   card(name) { return this.goto('file://' + path.join(ROOT, 'cards', name)); }
-  async setLabel(text, tone) { await this.page.evaluate(([t, k]) => window.__recSetLabel(t, k), [text, tone]); }
+  // The real WhatsApp screenshots card: waits until every crop is loaded; a missing capture fails the recording unless
+  // this is a --placeholder-whatsapp preview.
+  async whatsappCard() {
+    await this.card('03-whatsapp.html');
+    await this.page.waitForFunction(() => window.cropsReady(), null, { timeout: 10000 });
+    const missing = await this.page.evaluate(() => window.cropsMissing());
+    if (missing && !this.placeholder) throw new Error(`${missing} WhatsApp capture(s) missing in assets/whatsapp/`);
+    await this.page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  }
+  // The href of the "View" link in the list row containing `text`, looked up in a separate, unrecorded page.
+  async lookupHref(listPath, text) {
+    const p = await this.page.context().newPage();
+    try {
+      await p.goto(this.base + listPath, { waitUntil: 'load' });
+      const href = await p.locator('tbody tr', { hasText: text }).first().getByRole('link', { name: /View/ }).getAttribute('href');
+      if (!href) throw new Error(`no View link for "${text}" on ${listPath}`);
+      return href;
+    } finally { await p.close(); }
+  }
 
   // ---- text assertions ----
   async see(text, { scope = this.page, timeout = 15000 } = {}) {
@@ -208,7 +235,7 @@ export class Runtime {
     await this.glideTo(b.x + Math.min(b.width * fx, 360), b.y + Math.min(b.height * fy, 20), ms);
   }
   async keepInView(loc, margin) {
-    const ok = await loc.evaluate((el) => { const r = el.getBoundingClientRect(); return r.top >= 40 && r.bottom <= innerHeight - 56; });
+    const ok = await loc.evaluate((el) => { const r = el.getBoundingClientRect(); return r.top >= 4 && r.bottom <= innerHeight - 56; });
     if (!ok) await this.scrollTo(loc, { margin: margin ?? Math.round(VIEWPORT.height * 0.25) });
   }
   async scrollTo(loc, { margin = 28, ms } = {}) {
@@ -260,9 +287,10 @@ function smoothScrollBy({ dy, ms }) {
 // ---------------------------------------------------------------------------------------------------------------
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const plan = JSON.parse(fs.readFileSync(path.join(ROOT, 'beats.json'), 'utf8'));
+  const plan = JSON.parse(fs.readFileSync(path.join(ROOT, CUTS[opts.cut].beats), 'utf8'));
   const segment = plan.segments.find((s) => s.id === opts.segment);
-  const def = SEGMENTS[opts.segment];
+  if (!segment) throw new Error(`segment ${opts.segment} is not in ${CUTS[opts.cut].beats}`);
+  const def = CUTS[opts.cut].segments[opts.segment];
   const durations = JSON.parse(fs.readFileSync(path.resolve(ROOT, opts.durations), 'utf8'));
   const narration = (id) => (typeof durations[id] === 'number' ? durations[id] : null);
   const outDir = path.resolve(ROOT, opts.out);
@@ -270,7 +298,7 @@ async function main() {
   const outFile = path.join(outDir, `${opts.segment}.mp4`);
   const beatsFile = path.join(outDir, `${opts.segment}.beats.json`);
   const localOrigin = new URL(opts.baseUrl).origin;
-  log(`segment ${segment.id} (local app ${localOrigin}, pad ${opts.pad}s)`);
+  log(`${opts.cut} segment ${segment.id} (local app ${localOrigin}, pad ${opts.pad}s)`);
 
   const browser = await chromium.launch({ headless: true, args: ['--hide-scrollbars', '--force-color-profile=srgb', '--disable-lcd-text', '--font-render-hinting=none'] });
   const capture = new CdpCapture({ framesDir: path.join(path.dirname(outDir), '.frames', opts.segment), format: 'jpeg', quality: 100, width: VIEWPORT.width * DSF, height: VIEWPORT.height * DSF });
@@ -284,9 +312,8 @@ async function main() {
     const u = new URL(req.url());
     const m = req.method();
     if (u.protocol === 'data:' || u.protocol === 'blob:') return route.continue();
-    if (u.protocol === 'file:') return (u.pathname.startsWith(ROOT + '/') || u.pathname === ARCH_IMAGE) ? route.continue() : route.abort();
-    const allowed = u.origin === localOrigin || ALLOWED_HOSTS.some((r) => r.test(u.hostname));
-    if (!allowed) { blocked.add(u.hostname); return route.abort(); }
+    if (u.protocol === 'file:') return u.pathname.startsWith(ROOT + '/') ? route.continue() : route.abort();
+    if (u.origin !== localOrigin) { blocked.add(u.hostname); return route.abort(); }
     if (m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS') { violation = violation ?? `non-GET ${m} to ${u.hostname}${u.pathname}`; return route.abort(); }
     if (u.origin === localOrigin && req.resourceType() === 'document') {
       // the admin pages refresh themselves every 5 s; a refresh mid-beat would reset the scroll, so drop the tag
@@ -322,7 +349,7 @@ async function main() {
   if (failed) { process.exitCode = 1; return; }
   const duration = probeDuration(outFile);
   fs.writeFileSync(beatsFile, JSON.stringify({
-    segment: segment.id, video: path.basename(outFile), video_duration: +duration.toFixed(3),
+    cut: opts.cut, segment: segment.id, video: path.basename(outFile), video_duration: +duration.toFixed(3),
     spec: '1920x1080 H.264 30fps cfr yuv420p crf18 no audio', viewport: `${VIEWPORT.width}x${VIEWPORT.height}@${DSF}x`,
     pad_seconds: opts.pad, blocked_hosts: [...blocked], placeholder_whatsapp: opts.placeholder, capture_stats: capture.stats ?? null, warnings: rt.warnings, beats: rt.beats,
   }, null, 2) + '\n');

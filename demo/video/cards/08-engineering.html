@@ -1,0 +1,17 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Engineering verification</title><link rel="stylesheet" href="card.css">
+<style>
+ .grid { display:grid; grid-template-columns:1fr 1fr; gap:28px; margin-top:50px; }
+ .grid div { background:var(--card); border:1px solid var(--border); border-left:6px solid var(--accent); border-radius:14px; padding:34px 38px; min-height:190px; }
+ .grid b { display:block; font-size:42px; font-weight:700; line-height:1.15; }
+ .grid span { display:block; font-size:27px; color:var(--muted); margin-top:8px; }
+</style></head>
+<body>
+<p class="eyebrow">Engineering verification</p>
+<h1>Tested, scanned, deployed</h1>
+<div class="grid">
+ <div><b>1,112 tests &middot; 0 failures</b><span>RSpec on PostgreSQL 17</span></div>
+ <div><b>CI with security scanning</b><span>RuboCop &middot; Brakeman &middot; bundler-audit &middot; tests</span></div>
+ <div><b>Production HTTPS deployment</b><span>Kamal &middot; Let's Encrypt</span></div>
+ <div><b>Backup / restore drill passed</b><span>restored with identical row counts</span></div>
+</div>
+</body></html>

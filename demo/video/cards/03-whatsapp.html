@@ -1,21 +1,54 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>WhatsApp side</title><link rel="stylesheet" href="card.css">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Real WhatsApp interaction</title><link rel="stylesheet" href="card.css">
+<!--
+  The author's own phone screenshots (demo/video/assets/whatsapp/, native 1260 px wide, status bar cropped), shown as
+  plain crops: each .crop shows rows y0..y1 of one screenshot, scaled to the given width. Nothing in a screenshot is
+  edited, redrawn or retyped. Three shots; the recorder switches them with show(n) in time with the narration.
+  A missing file renders as a dashed "capture pending" box (bin/demo --placeholder-whatsapp only).
+-->
 <style>
- body { padding:34px 72px 28px; }
- h1 { font-size:30px; line-height:1.2; margin:0 0 2px; }
- .sub { font-size:20px; color:var(--muted); margin:0; }
- .row { display:flex; gap:34px; justify-content:center; margin-top:16px; }
- figure { margin:0; text-align:center; }
- img { height:570px; width:auto; max-width:300px; object-fit:contain; border-radius:20px; border:1px solid var(--border); box-shadow:0 6px 22px rgba(0,0,0,.12); display:block; }
- figcaption { margin-top:10px; font-size:20px; color:var(--muted); }
+ body { padding:40px 72px 30px; }
+ header h1 { font-size:40px; margin:0; }
+ header p { font-size:24px; color:var(--muted); margin:4px 0 0; }
+ .stage { position:relative; flex:1; margin-top:20px; }
+ .shot { position:absolute; inset:0; display:flex; gap:44px; justify-content:center; align-items:flex-start; opacity:0; transition:opacity .16s ease; }
+ .shot.on { opacity:1; }
+ figure { margin:0; display:flex; flex-direction:column; align-items:center; }
+ .crop { --w:560; width:calc(var(--w) * 1px); height:calc(var(--w) * (var(--y1) - var(--y0)) / 1260 * 1px);
+   background-repeat:no-repeat; background-size:calc(var(--w) * 1px) auto; background-position:0 calc(var(--w) * var(--y0) / -1260 * 1px);
+   border-radius:18px; border:1px solid var(--border); box-shadow:0 10px 30px rgba(0,0,0,.13); background-color:#fff; }
+ .crop.missing { background-image:none !important; border:4px dashed var(--bad); display:flex; align-items:center; justify-content:center; color:var(--bad); font-size:26px; font-weight:650; }
+ .crop.missing::after { content:"capture pending"; }
+ figcaption { margin-top:14px; font-size:24px; color:var(--text); }
+ figcaption b { display:inline-flex; width:34px; height:34px; border-radius:50%; background:var(--accent); color:#fff; font-size:20px; align-items:center; justify-content:center; margin-right:10px; vertical-align:2px; }
 </style></head>
 <body>
-<h1>Real WhatsApp captures &middot; the live catalog and cart</h1>
-<p class="sub">Captured on the author's phone, 7 Oct 2026 (the author's own test order)</p>
-<div class="row">
- <figure><img src="../assets/whatsapp/01-catalog.png" alt=""><figcaption>The catalog inside WhatsApp</figcaption></figure>
- <figure><img src="../assets/whatsapp/02-product.png" alt=""><figcaption>A product page</figcaption></figure>
- <figure><img src="../assets/whatsapp/03-cart.png" alt=""><figcaption>The cart</figcaption></figure>
- <!-- Optional fourth capture: the chat after the cart was sent. Hidden if the file is absent. -->
- <figure id="sent"><img src="../assets/whatsapp/04-order-sent.png" alt="" onerror="document.getElementById('sent').remove()"><figcaption>Sent, with the order receipt</figcaption></figure>
+<header>
+ <h1>Real WhatsApp interaction &middot; 7 Oct 2026</h1>
+ <p>Author's test account</p>
+</header>
+<div class="stage">
+ <section class="shot on" id="s1">
+  <figure><div class="crop" data-src="00-chat-greeting.png" style="--w:515;--y0:0;--y1:1420"></div><figcaption><b>1</b>&ldquo;Hi&rdquo; &rarr; catalog card</figcaption></figure>
+ </section>
+ <section class="shot" id="s2">
+  <figure><div class="crop" data-src="01-catalog.png" style="--w:470;--y0:0;--y1:1545"></div><figcaption><b>2</b>The catalog, inside WhatsApp</figcaption></figure>
+  <figure><div class="crop" data-src="02-product.png" style="--w:440;--y0:600;--y1:1960"></div><figcaption>A product</figcaption></figure>
+ </section>
+ <section class="shot" id="s3">
+  <figure><div class="crop" data-src="03-cart.png" style="--w:540;--y0:0;--y1:1220"></div><figcaption><b>3</b>The cart</figcaption></figure>
+  <figure><div class="crop" data-src="04-order-sent.png" style="--w:660;--y0:1420;--y1:2120"></div><figcaption>Sent &rarr; receipt</figcaption></figure>
+ </section>
 </div>
+<script>
+ for (const el of document.querySelectorAll('.crop')) {
+   const src = '../assets/whatsapp/' + el.dataset.src;
+   const img = new Image();
+   img.onload = () => { el.style.backgroundImage = `url("${src}")`; el.dataset.ready = '1'; };
+   img.onerror = () => { el.classList.add('missing'); el.dataset.ready = '1'; };
+   img.src = src;
+ }
+ window.show = (n) => document.querySelectorAll('.shot').forEach((s, i) => s.classList.toggle('on', i === n - 1));
+ window.cropsReady = () => [...document.querySelectorAll('.crop')].every((c) => c.dataset.ready);
+ window.cropsMissing = () => document.querySelectorAll('.crop.missing').length;
+</script>
 </body></html>
