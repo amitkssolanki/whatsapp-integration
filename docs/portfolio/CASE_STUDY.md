@@ -92,7 +92,7 @@ In total: 10 real webhook deliveries (3 messages, 7 statuses), all processed exa
 
 ## Engineering quality
 
-**Tests and CI.** 77 spec files, 1,111 examples, 0 failures, locally and on GitHub CI at `c6d63ee`. Highlights: real-thread concurrency specs (webhook dedupe, send claim, customer creation); all 24 orderings of accepted, sent, delivered and read end at `read` with every timestamp; specs for a stale status arriving after a resend; and a synthetic seed that runs in a self-checking transaction and rolls back if any guarantee is violated, including any network attempt. Three CI jobs, all green: lint (RuboCop), security (Brakeman with `--exit-on-warn`, and bundler-audit) and RSpec on PostgreSQL 17. There are 125 commits since V1, 20 of them merges; each phase was a branch merged with `--no-ff`.
+**Tests and CI.** 77 spec files, 1,111 examples, 0 failures, locally and on GitHub CI at `c6d63ee`. Highlights: real-thread concurrency specs (webhook dedupe, send claim, customer creation); all 24 orderings of accepted, sent, delivered and read end at `read` with every timestamp; specs for a stale status arriving after a resend; and a synthetic seed that runs in a self-checking transaction and rolls back if any guarantee is violated, including any network attempt. Three CI jobs, all green: lint (RuboCop), security (Brakeman with `--exit-on-warn`, and bundler-audit) and RSpec on PostgreSQL 17. From V1 to the release commit `c6d63ee` there were 125 commits, 20 of them merges; each phase was a branch merged with `--no-ff`.
 
 **Reviews.** Four AI review rounds by a separate reviewer model (two on security and correctness, one pre-deploy, one pre-release) found real defects, all fixed:
 

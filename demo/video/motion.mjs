@@ -94,7 +94,7 @@ async function main() {
   const bgs = [];
   for (let i = 0; i < edl.steps.length; i++) {
     const file = path.join(work, `bg-step${i}.png`);
-    const q = new URLSearchParams({ steps: edl.steps.join('|'), step: i, sub: `${edl.recorded} · Author’s test account`, note: edl.note });
+    const q = new URLSearchParams({ steps: edl.steps.join('|'), step: i, sub: `${edl.recorded} · Captured on author’s phone`, note: edl.note });
     await page.goto('file://' + path.join(ROOT, 'cards', '03-whatsapp-motion.html') + '?' + q);
     await page.evaluate(() => document.fonts.ready);
     await page.addStyleTag({ content: 'body{animation:none !important}' });

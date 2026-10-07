@@ -30,7 +30,7 @@
         {"id": "b08-flow", "visual": "how it works: WhatsApp, webhook, persist, queue, process, order validation, reply and status tracking", "text": "Behind it, every webhook is verified, stored and acknowledged, then processed once in the background, and every reply is tracked."},
         {"id": "b09-demo", "visual": "application demo card (synthetic data), then the operator's conversation view for the synthetic hero customer", "text": "Now the operator's view, with demo data: Maya says hi and sends her cart.", "min_seconds": 5.2},
         {"id": "b10-order", "visual": "order detail: lines, customer price vs catalog price, total", "text": "Each line is checked against the catalog price.", "min_seconds": 3.4},
-        {"id": "b11-notice", "visual": "order accepted + notification sent, delivered, read timestamps", "text": "Once accepted, the reply is tracked by the statuses Meta sends back: sent, delivered, read."},
+        {"id": "b11-notice", "visual": "order accepted + notification sent, delivered, read timestamps", "text": "Once accepted, the reply is tracked through each status update: sent, delivered, read."},
         {"id": "b12-health", "visual": "health page: failures by category, unknown outcome never resent", "text": "Failures stay visible, and an ambiguous send is never resent."}
       ]
     },

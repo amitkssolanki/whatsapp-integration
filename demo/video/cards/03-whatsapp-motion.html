@@ -32,7 +32,7 @@
  const q = new URLSearchParams(location.search);
  const steps = (q.get('steps') || 'Chat|Catalog|Product|Cart').split('|');
  const on = q.has('step') ? +q.get('step') : -1; // -1: every step lit (the screenshot)
- document.getElementById('sub').textContent = q.get('sub') || '7 Oct 2026 · Author’s test account';
+ document.getElementById('sub').textContent = q.get('sub') || '7 Oct 2026 · Captured on author’s phone';
  document.getElementById('note').textContent = q.get('note') || 'Screen recordings from the phone';
  const ol = document.getElementById('steps');
  steps.forEach((s, i) => {
