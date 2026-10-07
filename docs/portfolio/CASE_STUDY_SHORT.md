@@ -8,7 +8,7 @@
 
 **Real-world verification.** On 2026-10-06 I ran a session against real Meta traffic as the only customer. The first catalog reply failed with error #131009; its stored details pointed straight at a disabled catalog setting, the same cause V1's log had held unnoticed. I fixed it by hand in Meta's settings; the next "Hi" got a working catalog card. The session processed 10 real webhook deliveries exactly once.
 
-**Result.** 1,111 passing RSpec examples, green CI, and a deployed HTTPS environment. Not verified against Meta: catalog push and the 24-hour window. No operating period (planned, intentionally not pursued), no uptime data, no real customers. Built with AI-directed development (Claude Code); Meta account actions done by hand.
+**Result.** 1,112 RSpec examples, 0 failures on the current code; 1,111 at release commit `33b18a5`, with GitHub CI green; and a deployed HTTPS environment. Not verified against Meta: catalog push and the 24-hour window. No operating period (planned, intentionally not pursued), no uptime data, no real customers. Built with AI-directed development (Claude Code); Meta account actions done by hand.
 
 - [Repository](https://github.com/amitkssolanki/whatsapp-integration)
 - [Full case study](https://github.com/amitkssolanki/whatsapp-integration/blob/main/docs/portfolio/CASE_STUDY.md)
