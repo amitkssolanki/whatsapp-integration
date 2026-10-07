@@ -30,7 +30,7 @@ SendMessageJob(message)                            (async)
   POST /messages (outside any transaction), biz_opaque_callback_data = message id
   record: accepted | retry_scheduled | failed | unknown (own transaction)
 Status webhooks come back through the same ingestion path and move the lifecycle forward.
-Recurring: StallSweeperJob (stuck processing → failed; stuck sending → unknown).
+Recurring: StallSweeperJob every 5 minutes (stuck processing → failed; sending for more than 5 minutes → unknown).
 Operator UI only writes rows and enqueues jobs. It never calls Meta inline.
 ```
 
@@ -112,7 +112,8 @@ partially_failed | failed | ignored. unparseable and ignored are terminal. proce
 processing only via operator replay. StallSweeper: processing older than 10 minutes →
 failed (error "stalled"); while attempts < 3 the sweeper also re-enqueues it. The sweeper re-enqueues
 deliveries stuck in `received` for 5 minutes and outbound messages stuck in `pending` for 10
-(job claims make duplicate jobs harmless).
+(job claims make duplicate jobs harmless). Outbound messages stuck in `sending` for 5 minutes
+move to `unknown` and are never resent.
 
 **Message (outbound):** `pending 10, sending 20, retry_scheduled 25, accepted 30,
 sent 40, delivered 50, read 60, failed 90, blocked 91, unknown 92`; inbound rows are
@@ -139,6 +140,10 @@ unknown, accepted or later. Statuses that arrive while a message is still `sendi
 only stamp their timestamp; whenever the message then moves to `accepted` or
 `unknown` (including via the stall sweeper) its state catches up to the furthest
 stamped step, so proof of delivery is never stranded behind `unknown`.
+
+Note: `ALLOWED_TRANSITIONS` lists `retry_scheduled → sent | delivered | read | failed` without
+a condition; that these happen only from a status webhook is enforced by the callers (the
+status handler), not by the transition table.
 
 A `retry_scheduled` message can be advanced by a status webhook too: when the POST got a
 5xx or 131000 but Meta did process it, a `sent`/`delivered`/`read` status (found by our
@@ -170,7 +175,7 @@ previous error and lifecycle timestamps cleared, and so are the `wa_message_id` 
 | HTTP delivery | none (always stored); `body_sha256` counts exact repeats | — |
 | inbound message | `messages.wa_message_id` | `INSERT ... ON CONFLICT DO NOTHING RETURNING id` inside the item transaction; no row → `duplicate`, skip ALL side effects |
 | order | `orders.source_message_id` UNIQUE | created in the same transaction as its message |
-| identical cart sent twice | — | two messages = two orders (V1 log has this). Not deduplicated. |
+| identical cart sent twice | — | two separate messages = two orders (a design decision, not an observation). Not deduplicated. |
 | status | lifecycle timestamp column | conditional UPDATE; 0 rows → `duplicate` |
 | outbound decision | `messages.idempotency_key` | `reply:<inbound message id>`, `greeting:<inbound message id>`, `order:<order id>:received`, `order:<order id>:accepted`, `order:<order id>:rejected`; `ON CONFLICT DO NOTHING`; enqueue only for new rows |
 | send execution | status claim pending/retry_scheduled → sending | one worker wins |
@@ -185,6 +190,8 @@ previous error and lifecycle timestamps cleared, and so are the `wa_message_id` 
 |---|---|---|
 | GET, mode=subscribe, verify token matches (constant-time) | 200, challenge as text | — |
 | GET, mismatch or verify token unset | 403 | — |
+| POST, invalid `Content-Length` (not a non-negative integer) | 400 | no |
+| POST, body over 3 MB (declared `Content-Length`, or a chunked body that grows past the limit while read) | 413 | no |
 | POST, signature missing/invalid | 401 | no (log + count only) |
 | POST, valid, body not JSON | 200 | yes, `unparseable` |
 | POST, valid, `object` ≠ whatsapp_business_account, or phone_number_id ≠ ours | 200 | yes, `ignored` (reason in outcome) |
@@ -201,8 +208,9 @@ failed. Processing failures are never in the HTTP response and never silent.
 Signature: HMAC-SHA256 of `request.raw_post` with the app secret,
 `ActiveSupport::SecurityUtils.secure_compare`. Fail closed: skipping is allowed only
 when `WHATSAPP_ALLOW_UNSIGNED=1` in development/test. Production refuses to boot
-without the app secret, verify token, access token, phone number id and admin
-credentials. The webhook controller inherits `ActionController::Base` without
+without the app secret, verify token, access token, phone number id, admin
+credentials and `APP_HOST`, and also refuses to boot when `WHATSAPP_ALLOW_UNSIGNED` or
+`FAULT_INJECT` is set. The webhook controller inherits `ActionController::Base` without
 `allow_browser`, ParamsWrapper or CSRF, never reads `params`, and logs no payload.
 
 ## 6. Processing items
@@ -251,15 +259,20 @@ Classify by Meta `code` first; HTTP status is only a fallback when there is no c
 | recipient_undeliverable | 131026, 131049, 131050, 130472 | no | 131049: wait 24h+ before any resend |
 | window_closed | 131047 | no | template only (Gate C) |
 | auth_config | 0, 190, 10, 200–299, 131005, HTTP 401/403 without a code | no; operator resend after fix | banner |
-| account_config | 133010✓, 133000, 131042, 131045 | no; operator resend after fix | banner; 131042 is billing |
+| account_config | 133010✓, 133000, 131042, 131045; 131009✓ when `error_data.details` names the Commerce Settings (catalog not linked or not enabled) | no; operator resend after fix | banner; 131042 is billing |
 | account_quality | 131048, 368, 131031, 131064 | no | stop scenario runs |
 | rate_limited | 4, 80007, 130429, 131056, HTTP 429 | yes, long backoff | no Retry-After header exists; 131056 waits 4^attempt seconds |
 | transient_platform | 1, 2, 131000, 131016, 131057, 133004, 2494100, HTTP 5xx | yes | |
 | transient_network | could not connect (open timeout, refused, DNS), or a TLS handshake/verification failure (`certificate verify failed`, `wrong version number`, `handshake failure`, `no protocols available`) | yes | request never left |
 | ambiguous | read timeout, connection reset after the request was sent, any other SSL error (e.g. `SSL_read: unexpected eof`: Faraday raises SSLError for failures while reading the response too) | **no** → `unknown` | resolved only by a correlated status webhook |
 | unclassified | anything else | no | flagged as a taxonomy gap |
+| synthetic_recipient | no Meta code | no | the recipient is a synthetic demo customer: `SendMessageJob` refuses to send and Meta is never called; not resendable |
 
-✓ = received by V1 (real evidence). Everything else comes from Meta's documentation
+✓ = received by V1 (real evidence). 131009 is overloaded: V1's five webhook-path 131009
+errors carried three different `error_data.details` (three a catalog card without a thumbnail,
+one the Commerce Settings cause, one a product missing from the catalog), and V2's first live
+session hit the Commerce Settings cause again. Only the details tell them apart, so the
+classifier reads them. Everything else comes from Meta's documentation
 (`docs/v2/meta-research.md`).
 
 Retry schedule (attempt n waits): 30 s, 2 min, 10 min, 30 min, then
@@ -285,12 +298,15 @@ Orders are always recorded. Issues set `review_status: needs_review`.
 
 | case | behavior | issue code |
 |---|---|---|
-| unknown SKU | line kept, product nil | unknown_sku |
+| unknown SKU (non-blank retailer id not in the local catalog) | line kept, product nil | unknown_sku |
+| blank or missing retailer id | line dropped | unknown_sku |
 | price ≠ our price | line priced at what the customer saw; `catalog_price_cents` stored | price_mismatch |
 | product out of stock locally | flagged | unavailable |
 | quantity not an integer ≥ 1 | line dropped | invalid_quantity |
+| price missing, negative or not a decimal | line dropped | invalid_price |
 | currency ≠ product currency | flagged | currency_mismatch |
 | catalog_id ≠ configured CATALOG_ID (when configured) | flagged | unknown_catalog |
+| item that is not an object | item skipped | malformed |
 | no usable lines | order kept, empty | malformed |
 | `order` object missing | item fails (replayable) | — |
 
@@ -323,7 +339,7 @@ ever loaded for display. `ops:report` records the commit as `GIT_SHA`, else `KAM
 (Kamal passes it to every app container, kamal 2.12.0 `lib/kamal/commands/app.rb`), else the
 local git checkout, else `unknown`.
 
-## 12. Fault injection (operating-period scenarios 4, 6, 7)
+## 12. Fault injection (scenarios 4, 6, 7 of the planned operating period, which was intentionally not pursued)
 
 `FaultInjection` reads the stored toggles on every check (see below):
 
@@ -358,7 +374,7 @@ outbound messages also not belonging to a customer whose name starts with "Demo 
 bytes and signature header through `Webhooks::Ingest` (no HTTP) and labels the new delivery
 `injected:repost` in the same transaction.
 
-## 13. Purge after the operating period
+## 13. Purge (written for the planned operating period, which was intentionally not pursued)
 
 `bin/rails ops:purge BEFORE=YYYY-MM-DD CONFIRM=yes [FORCE=yes]` (`Ops::Purge`; the old name
 `ops:purge_payloads` is an alias) keeps the consent promise ("phone number and name are stored

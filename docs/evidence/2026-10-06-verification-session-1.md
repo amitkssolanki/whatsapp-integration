@@ -2,7 +2,7 @@
 
 **Label: real.** Live WhatsApp traffic between one customer phone (the author's) and the
 deployed app at https://whatsapp.railsfanatics.com, through Meta's Cloud API. This is a
-verification session, not the operating period ([criteria](../operating/PROTOCOL.md)).
+verification session, not an operating period (none was run; [criteria](../operating/PROTOCOL.md)).
 Everything below is read from the production database and logs; ids are the app's own.
 Phone numbers, names and Meta message ids are left out on purpose. All times UTC.
 
@@ -39,14 +39,19 @@ flight.
 The first catalog card was rejected with **131009 "Parameter value is not valid"**, details:
 *"Check if a catalog is linked to the WhatsApp Business Account and the catalog is enabled in
 the WhatsApp Commerce Settings."* The catalog *was* linked to the business account (the
-read-only check confirmed it). The missing piece was per number: a newly registered number
-starts with the catalog switched off in its commerce settings. The owner enabled the catalog
-and cart for the number; the next "Hi" got a working catalog card.
+read-only check confirmed it). The missing piece was per number: this newly registered number
+had the catalog switched off in its commerce settings. The owner enabled the catalog
+and cart for the number by hand in Meta's settings; nothing was retried automatically, and
+the next "Hi" got a new, working catalog card.
 
-The same code, 131009, hit V1 in August for a different reason: a request bug (a
-`catalog_message` without `thumbnail_product_retailer_id`). Only `error_data.details`
-tells the two apart. At the time V2 classified both as `request_invalid` (not resendable),
-which was wrong for the configuration case. Fixed the same day: a 131009 whose details name
+V1's August log held this same code five times on the webhook path, with three different
+`error_data.details`: three times a request bug (a `catalog_message` without
+`thumbnail_product_retailer_id`), once exactly this Commerce Settings cause, and once
+"Products not found in FB Catalog". V1 kept them only in a log line, so nobody could tell
+them apart. V2 stored the code and the details on the message, which made the diagnosis
+here immediate. Only `error_data.details` separates the causes. At the time V2 classified
+the failure as `request_invalid` (not resendable), which was wrong for the configuration
+case. Fixed the same day: a 131009 whose details name
 the commerce settings is now `account_config`, which an operator can resend after fixing
 it. Message #30 keeps its original classification as the historical record.
 
@@ -78,6 +83,9 @@ operator, not by Meta):
   in about 6 seconds with jobs processing and data intact.
 - Backups: one `pg_dump` taken; a non-destructive restore drill into a scratch database
   matched production row counts and schema version; the scratch database was dropped.
+  The nightly cron dump was installed and first ran on schedule on 2026-10-07 (after this
+  session). The off-host copy in the runbook has not been performed, and there is no
+  heartbeat or uptime monitor yet.
 
 ## Found and fixed afterwards
 
@@ -92,5 +100,6 @@ operator, not by Meta):
 Catalog API push (`items_batch`) and reconcile against Meta; correlation-id echo on `failed`;
 a real duplicate delivery handled by V2; the 24h window block and override against Meta;
 real orders with price mismatch, unknown SKU, unavailable product or invalid quantity; real
-retryable and ambiguous send failures. These are scenarios in the
-[operating-period schedule](../operating/SCHEDULE.md).
+retryable and ambiguous send failures. They are covered by specs and the synthetic seed
+(simulated only). They were scenarios in the planned operating period, which was
+intentionally not pursued (decision 2026-10-07; see [the protocol](../operating/PROTOCOL.md)).

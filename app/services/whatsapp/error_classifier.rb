@@ -26,7 +26,7 @@ module Whatsapp
       "request_invalid" => [
         100,
         131008,
-        131009, # (V1) catalog_message without thumbnail_product_retailer_id
+        131009, # (V1, three causes) see COMMERCE_SETTINGS_DETAILS below
         131021,
         131051,
         131053,
@@ -125,12 +125,14 @@ module Whatsapp
       http_fallback(http_status.to_i)
     end
 
-    # 131009 "Parameter value is not valid" means two different things. V1 got it
-    # for a request bug (a catalog_message without a thumbnail). The first V2 live
-    # session (2026-10-06) got it because a newly registered number had the
-    # catalog switched off in its commerce settings; Meta's details then read
-    # "Check if a catalog is linked to the WhatsApp Business Account and the
-    # catalog is enabled in the WhatsApp Commerce Settings". That one is account
+    # 131009 "Parameter value is not valid" covers different causes, told apart
+    # only by error_data.details. V1's log (2026-08-08) has three: a request bug
+    # ("action['parameters'] cannot be empty": a catalog_message without a
+    # thumbnail), the catalog not enabled in Commerce Settings, and a thumbnail
+    # product missing from the catalog. The first V2 live session (2026-10-06)
+    # hit the Commerce Settings case again on a newly registered number: "Check
+    # if a catalog is linked to the WhatsApp Business Account and the catalog is
+    # enabled in the WhatsApp Commerce Settings". That one is account
     # configuration: fixable by the owner, then worth resending.
     COMMERCE_SETTINGS_DETAILS = /commerce settings|catalog is linked|catalog is enabled/i
 
