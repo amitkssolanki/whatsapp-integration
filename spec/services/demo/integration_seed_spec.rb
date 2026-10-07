@@ -43,7 +43,12 @@ RSpec.describe Demo::IntegrationSeed do
 
     it "creates only synthetic customers, deliveries and products, with unmistakably fake identifiers" do
       expect(Customer.pluck(:synthetic)).to all(be(true))
-      expect(Customer.order(:id).map(&:display_name)).to eq((1..11).map { |n| "Demo Customer #{n}" })
+      expect(Customer.order(:id).map(&:display_name)).to eq(described_class::CUSTOMER_NAMES)
+      expect(Customer.order(:id).map(&:display_name)).to eq(
+        [ "Maya Fernandes", "Daniel Okafor", "Sofia Marino", "Tom Becker", "Aisha Khan", "Lucas Moreau",
+          "Hannah Lee", "Ravi Shah", "Elena Petrova", "Ben Carter", "Nora Lindqvist" ]
+      )
+      expect(Customer.order(:id).pluck(:whatsapp_number)).to eq((2001..2011).map { |n| "1555010#{n}" })
       expect(Customer.pluck(:whatsapp_number)).to all(match(/\A1555010\d{4}\z/))
       # Never a real number: in particular never an Indian (+91) number such as the
       # project's real business number, which stays out of tracked files.
@@ -135,6 +140,40 @@ RSpec.describe Demo::IntegrationSeed do
       expect(Product.synthetic.count).to eq(4)
       expect(Category.on_menu).to be_empty
       expect(Catalog::FeedGenerator.new(base_url: "https://example.test").to_csv).not_to include("DEMO-")
+    end
+  end
+
+  describe "the hero scenario (customer 1, Maya Fernandes)" do
+    it "reads like a real interaction on the real menu: greeting, a three-line order with a note, receipt and notice delivered and read" do
+      create_menu({ "MAI-006" => 1550, "MAI-004" => 1950, "BEV-002" => 500 })
+      result = seed
+
+      expect(result).to be_passed
+      maya = Customer.synthetic.find_by!(display_name: "Maya Fernandes")
+      messages = maya.conversation.messages.chronological
+      expect(messages.map { |m| [ m.direction, m.purpose, m.status ] }).to eq(
+        [ [ "inbound", nil, "received" ], %w[outbound greeting read], [ "inbound", nil, "received" ],
+          %w[outbound order_received read], %w[outbound order_accepted read] ]
+      )
+      expect(messages.first.body).to eq("Hi! What's on the menu today?")
+      expect(messages.second.message_type).to eq("interactive")
+
+      order = maya.orders.sole
+      expect(order.order_items.order(:id).pluck(:product_retailer_id, :quantity, :item_price_cents)).to eq(
+        [ [ "MAI-006", 2, 1550 ], [ "MAI-004", 1, 1950 ], [ "BEV-002", 2, 500 ] ]
+      )
+      expect(order.total_cents).to eq(6050)
+      expect(order.formatted_total).to eq("$60.50")
+      expect(order).to be_accepted
+      expect(order).to be_clear
+      expect(order.wa_order_note).to eq("Delivery around 7:30 please")
+      expect(order.decided_by).to eq("demo-operator")
+
+      %w[order_received order_accepted].each do |purpose|
+        expect(messages.find { |m| m.purpose == purpose }).to have_attributes(sent_at: be_present, delivered_at: be_present, read_at: be_present)
+      end
+      expect(result.counts["order items"]).to eq(11)
+      expect(Customer.synthetic.pluck(:whatsapp_number).grep(/\A91/)).to be_empty
     end
   end
 

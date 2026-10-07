@@ -8,8 +8,8 @@ module Demo
   # (webhook controller, jobs, state machines), the same way Demo::Simulator
   # does, but in a way that cannot touch real data or Meta:
   #
-  #   * everything it creates is flagged `synthetic`: customers ("Demo Customer N",
-  #     fake 1 555 010 xxxx numbers), their conversations, messages and orders,
+  #   * everything it creates is flagged `synthetic`: customers (invented names, see
+  #     CUSTOMER_NAMES, with fake 1 555 010 xxxx numbers), their conversations, messages and orders,
   #     the webhook deliveries (flagged on creation, inside Demo::Sandbox), and the
   #     DEMO-* products. Fake message ids start with "sim." (never "wamid.").
   #   * Demo::Sandbox: WhatsappClient and Catalog::Client talk to an in-process fake,
@@ -35,6 +35,17 @@ module Demo
     CATEGORY_NAME = "Demo items (synthetic)".freeze
     OPERATOR = "demo-operator".freeze
     NUMBER_PREFIX = "1555010".freeze # the fictional 555-01xx range; numbers are 1555010 + 2001, 2002, ...
+    # Invented, fictional names: nobody real, only so the operator UI reads like a lived-in
+    # inbox. The customer is told apart by the `synthetic` flag and badge, never by the name.
+    CUSTOMER_NAMES = [
+      "Maya Fernandes", "Daniel Okafor", "Sofia Marino", "Tom Becker", "Aisha Khan", "Lucas Moreau",
+      "Hannah Lee", "Ravi Shah", "Elena Petrova", "Ben Carter", "Nora Lindqvist"
+    ].freeze
+    # The hero scenario's cart: real menu items at their catalog prices (db/seeds.rb), [sku, quantity].
+    HERO_ORDER = [ [ "MAI-006", 2 ], [ "MAI-004", 1 ], [ "BEV-002", 2 ] ].freeze
+    # Used when the real menu is not loaded (the seed must work without it): synthetic DEMO-* items.
+    HERO_ORDER_FALLBACK = [ [ "DEMO-AVAIL-1", 2 ], [ "DEMO-AVAIL-2", 1 ] ].freeze
+    HERO_NOTE = "Delivery around 7:30 please".freeze
     STATUS_GAPS = { "sent" => 2, "delivered" => 6, "read" => 140 }.freeze # seconds after the previous step
 
     PRODUCTS = [
@@ -64,7 +75,7 @@ module Demo
       result.counts.each { |table, count| lines << "  #{table}: #{count}" }
       lines << "" << "Per state:"
       result.states.each { |table, states| lines << "  #{table}: #{states.map { |state, count| "#{state} #{count}" }.join(', ')}" }
-      lines << "" << "Find them in the admin: customers named \"Demo Customer N\" and the \"synthetic\" badge; remove them with demo:purge_synthetic."
+      lines << "" << "Find them in the admin: customers with the synthetic badge; remove them with demo:purge_synthetic."
       lines.join("\n")
     end
 
@@ -121,10 +132,10 @@ module Demo
       "sim.#{kind}.#{@counter += 1}"
     end
 
-    # "Demo Customer N", created on first use (at the scenario's time).
+    # Synthetic customer number `index` (1..11), created on first use (at the scenario's time).
     def person(index)
       @people[index] ||= begin
-        customer = Customer.create!(whatsapp_number: "#{NUMBER_PREFIX}#{2000 + index}", display_name: "Demo Customer #{index}", synthetic: true)
+        customer = Customer.create!(whatsapp_number: "#{NUMBER_PREFIX}#{2000 + index}", display_name: CUSTOMER_NAMES.fetch(index - 1), synthetic: true)
         customer.create_conversation!
         { number: customer.whatsapp_number, name: customer.display_name }
       end
@@ -168,7 +179,7 @@ module Demo
     def greeting_and_catalog_card(who)
       scenario("greeting", "Hi -> catalog card -> read") do
         start_at(96)
-        delivery = receive(text_body(who, "Hi"))
+        delivery = receive(text_body(who, "Hi! What's on the menu today?"))
         card = outbound(who, "greeting")
         progress(card, through: "read")
 
@@ -181,7 +192,8 @@ module Demo
     def clean_order_accepted(who)
       scenario("clean_order", "Clean order -> receipt delivered/read -> accepted -> notice read") do
         start_at(95)
-        delivery = receive(order_body(who, [ line("DEMO-AVAIL-1", 2), line("DEMO-AVAIL-2", 1) ]))
+        lines = hero_lines
+        delivery = receive(order_body(who, lines.map { |sku, quantity| line(sku, quantity) }, note: HERO_NOTE))
         order = order_of(delivery)
         receipt = outbound(who, "order_received")
         progress(receipt, through: "read")
@@ -193,6 +205,8 @@ module Demo
         progress(notice, through: "read")
 
         check("the order is clear (no validation issues)", order.reload.clear?)
+        check("the order has the designed lines and the customer's note",
+              order.order_items.order(:id).pluck(:product_retailer_id, :quantity) == lines && order.wa_order_note == HERO_NOTE)
         check("the operator accepted it", accepted && order.accepted? && order.decided_by == OPERATOR)
         check("the receipt was read", receipt.reload.read?)
         check("the acceptance notice was read", notice.reload.read?)
@@ -375,6 +389,23 @@ module Demo
     end
 
     # --- plumbing specific to this script ---------------------------------
+
+    # The hero cart: the real menu items when all are on the menu and in stock, else the synthetic DEMO-* ones.
+    def hero_lines
+      skus = HERO_ORDER.map(&:first)
+      real = Product.non_synthetic.in_stock.where(sku: skus).count == skus.size
+      real ? HERO_ORDER : HERO_ORDER_FALLBACK
+    end
+
+    # The order body, with the customer's note (the order's `text`) when there is one.
+    def order_body(who, items, note: nil)
+      body = super(who, items)
+      return body unless note
+
+      payload = JSON.parse(body)
+      payload["entry"][0]["changes"][0]["value"]["messages"][0]["order"]["text"] = note
+      JSON.generate(payload)
+    end
 
     # [sku, quantity, price in cents]: the catalog price unless `cents` says otherwise.
     def line(sku, quantity, cents: nil)
