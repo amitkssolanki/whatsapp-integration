@@ -353,6 +353,7 @@ What this does not do, and what has not been shown:
 | `config/deploy.yml`, `config/recurring.yml`, `config/initializers/production_config_check.rb` | Deployment, schedules, boot checks |
 | `script/backup/`, `script/meta/` | Backup and restore; read-only Meta check |
 | `spec/fixtures/meta/v1/` | Sanitized real V1 payloads |
+| `bin/demo`, `demo/video/` | `bin/demo` regenerates the portfolio video (see [demo/video/README.md](demo/video/README.md)) |
 
 ## Author
 

@@ -1,0 +1,255 @@
+#!/usr/bin/env bash
+# Regenerates the portfolio video end to end (see demo/video/README.md).
+#
+#   bin/demo [--skip-db] [--only <segment-id>] [--force-narration] [--placeholder-whatsapp]
+#   (--placeholder-whatsapp writes everything under demo/video/out/preview/, never the final names)
+#
+# Exit codes: 0 done, 1 a prerequisite or step failed, 2 the fresh WhatsApp captures are missing (a human step).
+# Never contacts Meta, never logs in anywhere, never touches a database other than whatsapp_integration_demo_video.
+set -uo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VIDEO="$REPO/demo/video"
+OUT="$VIDEO/out"          # final outputs; --placeholder-whatsapp switches OUT to out/preview (set after option parsing)
+CAPTURES="$VIDEO/assets/whatsapp"
+DB_NAME="whatsapp_integration_demo_video"
+PORT=3021
+# Where the Kokoro narration venv is installed (the directory name is historical; see demo/video/README.md)
+KOKORO_VENV="$HOME/.cache/vrinda-tts/kokoro"
+NARRATION_DIR="$VIDEO/narration/kokoro-af_heart-speed0.95"
+FINAL_NAME="whatsapp-commerce-v2-demo.mp4"
+
+SKIP_DB=0; ONLY=""; FORCE_NARRATION=0; PLACEHOLDER=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --skip-db) SKIP_DB=1 ;;
+    --only) shift; ONLY="${1:-}"; [ -n "$ONLY" ] || { echo "--only needs a segment id (e.g. 03-lifecycle)" >&2; exit 1; } ;;
+    --force-narration) FORCE_NARRATION=1 ;;
+    --placeholder-whatsapp) PLACEHOLDER=1 ;;
+    -h|--help) sed -n "2,9p" "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "unknown option: $1 (see bin/demo --help)" >&2; exit 1 ;;
+  esac
+  shift
+done
+
+# A placeholder run never writes a final-named file: every artifact (video, scenes, logs, timing, captions, contact
+# sheet, thumbnail, timeline) goes under out/preview/.
+if [ "$PLACEHOLDER" = 1 ]; then OUT="$VIDEO/out/preview"; fi
+
+T0=$SECONDS
+step() { printf '\n==> %s\n' "$*"; }
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+timed() { printf '    (%ss)\n' "$((SECONDS - $1))"; }
+
+# env_demo CMD...: run CMD with a hermetic environment for the recording database. Every key listed in .env.example
+# (Meta tokens and ids, the business number, the webhook verify/app secrets, the catalog id, the admin credentials, and any
+# key added there later) is set to an empty string, so a value in .env can never reach the recording (dotenv never
+# overrides a variable that is already set). Only harmless settings are exempt: the catalog push is forced off and the
+# API version keeps its default. SOLID_QUEUE_IN_PUMA is unset, and DATABASE_URL pins the one database. It ends in
+# exec, so call it only as the last command of a subshell or pipeline.
+BLANK_KEYS=()
+while IFS= read -r key; do
+  case "$key" in CATALOG_SYNC_ENABLED|WHATSAPP_API_VERSION) continue ;; esac
+  BLANK_KEYS+=("$key=")
+done < <(sed -n 's/^[[:space:]]*\([A-Z][A-Z0-9_]*\)=.*/\1/p' "$REPO/.env.example")
+env_demo() {
+  exec env -u SOLID_QUEUE_IN_PUMA "${BLANK_KEYS[@]}" CATALOG_SYNC_ENABLED=false DATABASE_URL="postgres:///$DB_NAME" "$@"
+}
+
+# ---------------------------------------------------------------------------------------------------------------
+step "(a) Prerequisites"
+# ffmpeg/ffprobe come from PATH; fall back to Homebrew's default location
+for t in ffmpeg ffprobe; do
+  command -v "$t" >/dev/null 2>&1 || { [ -x "/opt/homebrew/bin/$t" ] && PATH="$PATH:/opt/homebrew/bin"; }
+done
+for tool in ffmpeg ffprobe node npm ruby psql; do
+  command -v "$tool" >/dev/null 2>&1 || fail "$tool is not installed (macOS: brew install ffmpeg node postgresql@17; ruby from rvm/rbenv)"
+done
+pg_isready -q 2>/dev/null || fail "PostgreSQL is not running (pg_isready fails). Start it, e.g. brew services start postgresql@17"
+
+if [ ! -d "$VIDEO/node_modules/playwright" ]; then
+  echo "    installing the recorder (npm ci, Playwright 1.62.0 pinned)"
+  (cd "$VIDEO" && npm ci --silent) || fail "npm ci failed in demo/video"
+fi
+CHROMIUM="$(cd "$VIDEO" && node -e "const {chromium}=require('playwright');process.stdout.write(chromium.executablePath())" 2>/dev/null)"
+if [ -z "$CHROMIUM" ] || [ ! -e "$CHROMIUM" ]; then
+  echo "    Chromium for Playwright 1.62.0 is missing; installing it (npx playwright install chromium)"
+  (cd "$VIDEO" && npx playwright install chromium) || fail "could not install Chromium"
+fi
+
+NEED_NARRATION=0
+if [ "$FORCE_NARRATION" = 1 ] || [ ! -s "$NARRATION_DIR/durations.json" ] || [ "$VIDEO/beats.json" -nt "$NARRATION_DIR/durations.json" ]; then
+  NEED_NARRATION=1
+fi
+if [ ! -x "$KOKORO_VENV/bin/python" ]; then
+  if [ "$NEED_NARRATION" = 1 ]; then
+    cat >&2 <<EOF
+ERROR: the Kokoro narration venv is missing ($KOKORO_VENV) and the narration has to be (re)generated.
+Install it once (the same setup as the author's earlier demo; see demo/video/README.md):
+
+  brew install espeak-ng
+  uv venv --python 3.11 ~/.cache/vrinda-tts/kokoro
+  uv pip install --python ~/.cache/vrinda-tts/kokoro/bin/python "kokoro>=0.9.4" soundfile numpy "transformers>=4.50" "tokenizers>=0.20" pip
+  ~/.cache/vrinda-tts/kokoro/bin/python -m spacy download en_core_web_sm
+
+then run bin/demo again.
+EOF
+    exit 1
+  else
+    echo "    note: the Kokoro venv is not installed, but the narration is up to date, so it is not needed now"
+  fi
+fi
+echo "    ok"
+
+# ---------------------------------------------------------------------------------------------------------------
+step "(b) Fresh WhatsApp captures"
+mkdir -p "$CAPTURES"
+CAPTURES_OK=1
+for f in 01-catalog.png 02-product.png 03-cart.png; do
+  p="$CAPTURES/$f"
+  if [ ! -s "$p" ] || [ "$(head -c 4 "$p" | tail -c 3)" != "PNG" ]; then CAPTURES_OK=0; echo "    missing or not a PNG: demo/video/assets/whatsapp/$f"; fi
+done
+if [ "$PLACEHOLDER" = 1 ]; then
+  echo "    --placeholder-whatsapp: card (c) will be a marked placeholder; everything goes to demo/video/out/preview/ (never the final names)"
+elif [ "$CAPTURES_OK" = 0 ]; then
+  cat >&2 <<EOF
+
+STOPPED: the fresh WhatsApp captures are not there yet. This is the one step that needs you.
+
+On your phone, open the WhatsApp chat with The Local Table (the demo business number). Do NOT send a message or place an
+order. Tap the catalog/shop icon in the chat header → screenshot the catalog list (01-catalog.png). Tap Classic Lasagne →
+screenshot the product page (02-product.png). Add 2 × Classic Lasagne, 1 × Baked Salmon with Fennel & Tomatoes, 2 × Apple
+Berry Smoothie, open the cart → screenshot the cart WITHOUT tapping Place order (03-cart.png). Save the three PNGs to
+  $CAPTURES/
+Before saving, CROP OUT or COVER anything that shows a phone number, a wa.me link, or any ids (business, catalog or product
+ids), plus notifications, the status bar and your own name or number. Each screenshot should show only the business name, the
+catalog, the product and the cart. No message is sent and no Meta traffic is created.
+
+Then run bin/demo again. (To test everything else first: bin/demo --placeholder-whatsapp)
+EOF
+  exit 2
+else
+  echo "    ok (3 captures)"
+fi
+
+# ---------------------------------------------------------------------------------------------------------------
+step "(c) Recording database ($DB_NAME)"
+if [ "$SKIP_DB" = 1 ]; then
+  echo "    --skip-db: using the existing database"
+  psql -lqt | cut -d'|' -f1 | grep -qw "$DB_NAME" || fail "--skip-db given but database $DB_NAME does not exist"
+else
+  [ "$DB_NAME" = "whatsapp_integration_demo_video" ] || fail "refusing to touch any database other than whatsapp_integration_demo_video"
+  # Ask Rails (same environment as the drop/load below) which database it would really use, and abort on any mismatch.
+  # config: the target resolved from database.yml + DATABASE_URL (works before the database exists);
+  # live: current_database on the connection (checked whenever the database already exists).
+  RAILS_TARGET="$(cd "$REPO" && env_demo RAILS_ENV=test bin/rails runner 'puts ActiveRecord::Base.connection_db_config.database' 2>/dev/null | tail -1)"
+  [ "$RAILS_TARGET" = "whatsapp_integration_demo_video" ] || fail "database guard: Rails resolves the target to '${RAILS_TARGET:-?}', not whatsapp_integration_demo_video; aborting before any drop"
+  if psql -lqt | cut -d'|' -f1 | grep -qw "$DB_NAME"; then
+    LIVE_TARGET="$(cd "$REPO" && env_demo RAILS_ENV=test bin/rails runner 'puts ActiveRecord::Base.connection.current_database' 2>/dev/null | tail -1)"
+    [ "$LIVE_TARGET" = "whatsapp_integration_demo_video" ] || fail "database guard: current_database is '${LIVE_TARGET:-?}', not whatsapp_integration_demo_video; aborting before any drop"
+  fi
+  if lsof -ti "tcp:$PORT" >/dev/null 2>&1; then fail "port $PORT is in use (a server on it would hold the database open); stop it first"; fi
+  t=$SECONDS
+  mkdir -p "$OUT"
+  (
+    cd "$REPO" || exit 1
+    # Meta/admin values blanked (env_demo): nothing here can reach Meta. DATABASE_URL pins the one database.
+    env_demo RAILS_ENV=test bin/rails db:drop db:create db:schema:load db:seed demo:seed_integration CONFIRM=yes
+  ) > "$OUT/db.log" 2>&1 || { tail -20 "$OUT/db.log" >&2; fail "database setup failed (full log: demo/video/out/db.log)"; }
+  timed "$t"
+fi
+
+# ---------------------------------------------------------------------------------------------------------------
+step "(d) Narration"
+if [ "$NEED_NARRATION" = 1 ]; then
+  t=$SECONDS
+  HF_HUB_OFFLINE=1 "$KOKORO_VENV/bin/python" "$VIDEO/narrate.py" --backend kokoro --voice af_heart --speed 0.95 || fail "narration failed"
+  timed "$t"
+else
+  echo "    up to date (use --force-narration to regenerate)"
+fi
+[ -s "$NARRATION_DIR/durations.json" ] || fail "no narration durations at $NARRATION_DIR"
+
+# ---------------------------------------------------------------------------------------------------------------
+step "(e) Local app + recording"
+mkdir -p "$OUT"
+SEGMENTS="$(node -e "const p=require('$VIDEO/beats.json');console.log(p.segments.map(s=>s.id).join(' '))")"
+if [ -n "$ONLY" ]; then
+  case " $SEGMENTS " in *" $ONLY "*) SEGMENTS="$ONLY" ;; *) fail "unknown segment '$ONLY' (one of: $SEGMENTS)" ;; esac
+else
+  rm -rf "$OUT/scenes"
+fi
+rm -rf "$OUT/.frames"
+mkdir -p "$OUT/scenes"
+
+if lsof -ti "tcp:$PORT" >/dev/null 2>&1; then fail "port $PORT is in use; stop whatever is listening there"; fi
+SERVER_PID=""
+cleanup() {
+  if [ -n "$SERVER_PID" ] && kill -0 "$SERVER_PID" 2>/dev/null; then
+    kill "$SERVER_PID" 2>/dev/null
+    for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$SERVER_PID" 2>/dev/null || break; sleep 0.5; done
+    kill -9 "$SERVER_PID" 2>/dev/null
+    echo "    server stopped"
+  fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+(
+  cd "$REPO" || exit 1
+  # No job processes while recording: SOLID_QUEUE_IN_PUMA is UNSET (even an empty value turns the Puma plugin on).
+  env_demo ADMIN_AUTH_DISABLED=1 DEMO_MASK_PII=0 bin/rails server -p "$PORT" -b 127.0.0.1
+) > "$OUT/server.log" 2>&1 &
+SERVER_PID=$!
+
+echo "    waiting for http://localhost:$PORT/up"
+UP=0
+for _ in $(seq 1 90); do
+  if curl -fsS -o /dev/null "http://localhost:$PORT/up" 2>/dev/null; then UP=1; break; fi
+  kill -0 "$SERVER_PID" 2>/dev/null || { tail -20 "$OUT/server.log" >&2; fail "the server exited early"; }
+  sleep 1
+done
+[ "$UP" = 1 ] || fail "the server did not come up in 90 s (see demo/video/out/server.log)"
+
+REC_ARGS=()
+[ "$PLACEHOLDER" = 1 ] && REC_ARGS+=(--placeholder-whatsapp)
+for seg in $SEGMENTS; do
+  t=$SECONDS
+  echo "    recording $seg"
+  (cd "$VIDEO" && node record.mjs --segment "$seg" --out "$OUT/scenes" --base-url "http://localhost:$PORT" ${REC_ARGS[@]+"${REC_ARGS[@]}"}) > "$OUT/record-$seg.log" 2>&1 \
+    || { tail -25 "$OUT/record-$seg.log" >&2; fail "recording $seg failed (log: demo/video/out/record-$seg.log)"; }
+  grep -E "^(wrote|warnings|blocked)" "$OUT/record-$seg.log" | sed 's/^/      /'
+  timed "$t"
+done
+cleanup; SERVER_PID=""
+
+if [ -n "$ONLY" ]; then
+  echo
+  echo "Recorded only $ONLY: $OUT/scenes/$ONLY.mp4 (assembly skipped; run bin/demo --skip-db for the whole video)"
+  echo "Total $((SECONDS - T0)) s"
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------------------------------------------
+step "(f) Assemble"
+if [ "$PLACEHOLDER" = 1 ]; then NAME="preview-placeholder.mp4"; else NAME="$FINAL_NAME"; fi
+t=$SECONDS
+ruby "$VIDEO/assemble.rb" --scenes "$OUT/scenes" --narration "$NARRATION_DIR" --out "$OUT" --name "$NAME" || fail "assembly failed"
+timed "$t"
+
+step "(g) Timing index, captions, contact sheet, thumbnail"
+ruby "$VIDEO/finish.rb" --out "$OUT" || fail "finishing step failed"
+rm -rf "$OUT/.frames"
+
+# ---------------------------------------------------------------------------------------------------------------
+FILE="$OUT/$NAME"
+DUR="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$FILE")"
+SIZE="$(du -h "$FILE" | cut -f1)"
+echo
+echo "Done in $((SECONDS - T0)) s."
+echo "  video:     $FILE"
+printf '  duration:  %.1f s\n' "$DUR"
+echo "  size:      $SIZE"
+echo "  also in:   $OUT (timing.md, captions.srt, contact-sheet.png, thumbnail.png, timeline.json, scenes/)"
+[ "$PLACEHOLDER" = 1 ] && echo "  NOTE: this is a PLACEHOLDER preview in out/preview/ (card c is not real; no final-named file was written). Take the phone captures and run bin/demo for the final video."
+exit 0

@@ -1,0 +1,24 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Error 131009</title><link rel="stylesheet" href="card.css">
+<style>
+ body { padding:50px 80px 36px; }
+ h1 { font-size:52px; margin-bottom:22px; }
+ blockquote { margin:0 0 30px; padding:22px 32px; background:var(--card); border:1px solid var(--border); border-left:6px solid var(--bad); border-radius:10px; font-size:32px; line-height:1.35; }
+ blockquote small { display:block; font-size:19px; color:var(--muted); margin-bottom:6px; letter-spacing:.04em; text-transform:uppercase; }
+ ol { list-style:none; margin:0; padding:0; display:grid; gap:17px; counter-reset:s; }
+ ol li { counter-increment:s; display:flex; gap:20px; align-items:center; font-size:31px; line-height:1.25; }
+ ol li::before { content:counter(s); flex:none; width:48px; height:48px; border-radius:50%; background:var(--accent); color:#fff; font-weight:700; display:inline-flex; align-items:center; justify-content:center; font-size:28px; }
+ ol li:nth-child(1)::before { background:var(--bad); }
+ .foot { font-size:20px; }
+</style></head>
+<body>
+<h1>Error 131009 &mdash; stored with Meta's details</h1>
+<blockquote><small>Meta's real error details, as stored on the message</small>&ldquo;Check if a catalog is linked to the WhatsApp Business Account and the catalog is enabled in the WhatsApp Commerce Settings&rdquo;</blockquote>
+<ol>
+ <li>Meta returned 131009 on the first catalog card</li>
+ <li>V2 stored the code and the details on the message</li>
+ <li>Diagnosis: a commerce setting on the new number (account configuration, not code)</li>
+ <li>Fixed by hand in Meta's settings &mdash; the app changes no Meta settings</li>
+ <li>The next message worked; a real order went through</li>
+</ol>
+<p class="foot">Real evidence: docs/evidence/2026-10-06-verification-session-1.md</p>
+</body></html>

@@ -1,0 +1,25 @@
+/* Shared look for the portfolio-video cards: the admin UI's palette and system font. 1440x810 CSS px. */
+:root { --accent:#1f8a4c; --bg:#fafaf8; --card:#fff; --border:#e4e2dc; --text:#22221f; --muted:#6b6a63; --bad:#b43232; --info:#1d6fb8; }
+* { box-sizing:border-box; }
+html,body { margin:0; width:1440px; height:810px; overflow:hidden; background:var(--bg); color:var(--text); }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; line-height:1.35;
+  padding:64px 96px 72px; display:flex; flex-direction:column; animation:fadein .6s ease both; }
+@keyframes fadein { from { opacity:0 } to { opacity:1 } }
+.center { justify-content:center; align-items:center; text-align:center; }
+.eyebrow { font-size:24px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); font-weight:600; margin:0 0 14px; }
+h1 { font-size:52px; line-height:1.15; margin:0 0 10px; font-weight:650; letter-spacing:-.01em; }
+h1.hero { font-size:92px; margin-bottom:22px; }
+.sub { font-size:34px; color:var(--text); margin:0 0 36px; }
+.muted { color:var(--muted); }
+.rule { width:96px; height:4px; background:var(--accent); border:0; border-radius:2px; margin:0 0 34px; }
+.kicker { font-size:26px; color:var(--muted); margin:0; }
+.tiles { display:grid; grid-template-columns:1fr 1fr; gap:28px; margin-top:44px; }
+.tile { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:28px 32px; display:flex; align-items:center; gap:28px; min-height:200px; }
+.tile .n { font-size:96px; font-weight:700; line-height:1; min-width:150px; text-align:right; font-variant-numeric:tabular-nums; }
+.tile .n.bad { color:var(--bad); } .tile .n.warn { color:#9a6700; }
+.tile .t { font-size:36px; line-height:1.25; }
+.facts { list-style:none; padding:0; margin:34px 0 0; display:grid; gap:20px; }
+.facts li { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:26px 34px; font-size:36px; display:flex; align-items:center; gap:26px; }
+.facts li::before { content:"\2713"; color:#fff; background:var(--accent); width:48px; height:48px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:30px; flex:none; }
+.badge { display:inline-block; font-size:22px; padding:4px 16px; border-radius:999px; background:rgba(31,138,76,.12); color:var(--accent); font-weight:600; }
+.foot { margin-top:auto; font-size:20px; color:var(--muted); }

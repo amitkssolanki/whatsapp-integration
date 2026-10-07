@@ -1,0 +1,8 @@
+{
+  "name": "whatsapp-commerce-demo-video",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Unattended recording of the WhatsApp Commerce V2 portfolio video (recording tooling only; no app code).",
+  "dependencies": { "playwright": "1.62.0" }
+}
