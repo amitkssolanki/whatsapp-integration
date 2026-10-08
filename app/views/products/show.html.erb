@@ -1,6 +1,6 @@
 <% content_for :title, @product.name %>
 <div class="wrap">
-  <p><%= link_to "← The Local Table", root_path, class: "muted" %></p>
+  <p><%= link_to "← The Local Table", products_path, class: "muted" %></p>
 
   <div class="product-hero">
     <img src="<%= @product.image_url %>" alt="<%= @product.name %>">

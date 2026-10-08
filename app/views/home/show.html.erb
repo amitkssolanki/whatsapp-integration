@@ -1,0 +1,93 @@
+<% content_for :title, "WhatsApp Commerce V2 · The Local Table" %>
+<% content_for :head do %>
+  <meta name="description" content="A production-oriented reference implementation of WhatsApp Catalog + Cart ordering on Rails 8, PostgreSQL and the WhatsApp Cloud API, verified against real Meta traffic.">
+<% end %>
+<% repo = "https://github.com/amitkssolanki/whatsapp-integration" %>
+
+<div class="home">
+  <header class="home-hero">
+    <div class="home-hero-text">
+      <p class="home-eyebrow"><span class="home-dot" aria-hidden="true"></span>WhatsApp Commerce V2 · reference implementation</p>
+      <h1>WhatsApp ordering, rebuilt for what the demo didn't show.</h1>
+      <p class="home-lede">A production-oriented reference implementation of WhatsApp Catalog + Cart ordering, on Rails 8, PostgreSQL and the WhatsApp Cloud API, verified against real Meta traffic.</p>
+      <p class="home-actions">
+        <%= link_to "Read the case study", "#{repo}/blob/main/docs/portfolio/CASE_STUDY.md", class: "home-btn home-btn-primary" %>
+        <%= link_to "Source on GitHub", repo, class: "home-btn" %>
+        <%= link_to "Public menu", products_path, class: "home-btn" %>
+      </p>
+      <p class="home-note">The Local Table is a fictional restaurant; its menu is seed data.</p>
+    </div>
+    <figure class="home-phone">
+      <%= image_tag "home-real-order.jpg", width: 340, height: 405, alt: "WhatsApp chat with The Local Table: a sent cart of 2 items at $20.50, the reply \"Thanks! We've received your order #11 (2 items)\", and the reply \"Good news! Your order #11 is confirmed\"." %>
+      <figcaption>Real order, 7 Oct 2026, captured on the author's phone: the cart sent from WhatsApp's catalog, the app's receipt, and the confirmation after the operator accepted it.</figcaption>
+    </figure>
+  </header>
+
+  <section class="home-section" aria-labelledby="why">
+    <h2 id="why">Why V2 exists</h2>
+    <div class="home-why">
+      <p><strong>Version one took real orders in August 2026.</strong> Its own logs showed what the demo hid: all 36 delivery-status webhooks were discarded, 7 errors were answered with HTTP 200 and kept only in a log line, and not one outbound message had a Meta message id.</p>
+      <p><strong>Version two was rebuilt around those problems.</strong> Webhooks are stored before they are interpreted, effects are made idempotent, every outbound message has an explicit state, and failures are visible to an operator.</p>
+    </div>
+  </section>
+
+  <section class="home-section" aria-labelledby="built">
+    <h2 id="built">How it is built</h2>
+    <ul class="home-pillars">
+      <li><h3>Persist before processing</h3><p>Each webhook is signature-checked and stored with its background job in one database transaction, then acknowledged. The work happens afterwards.</p></li>
+      <li><h3>Idempotent effects</h3><p>Each item is keyed by its Meta message id, so a duplicate delivery changes nothing, and stored deliveries can be replayed safely.</p></li>
+      <li><h3>Explicit outbound lifecycle</h3><p>Replies go through an outbox and only move forward: sent, delivered, read. A send with an unknown outcome is never resent automatically.</p></li>
+      <li><h3>Provider errors, classified</h3><p>Meta's error code and details are stored on the message and classified as retryable, permanent, configuration or ambiguous.</p></li>
+      <li><h3>Orders checked against the catalog</h3><p>Every line keeps the price the customer saw and is compared with the catalog; mismatches and unknown items are flagged for review.</p></li>
+      <li><h3>Operator visibility</h3><p>Orders, conversations, deliveries with safe replay, and a health page for failures, unknown outcomes and blocked messages.</p></li>
+    </ul>
+  </section>
+
+  <section class="home-section" aria-labelledby="verified">
+    <h2 id="verified">Verified against real Meta traffic</h2>
+    <p class="home-section-lede">Not a mock: the deployed app ran against Meta's real WhatsApp Cloud API, with the author as the only customer.</p>
+    <ul class="home-checks">
+      <li>10 real webhook deliveries in the 6 Oct 2026 verification session, each applied once.</li>
+      <li>A real order through WhatsApp's Catalog and Cart, checked against the catalog and accepted in the operator console.</li>
+      <li>Error <code>131009</code> on the first catalog card, diagnosed from Meta's stored details: the catalog was switched off in the new number's commerce settings. Fixed by hand in Meta; the next message worked.</li>
+      <li>Every sent reply tracked to read through Meta's status webhooks, with our correlation id echoed on all seven.</li>
+      <li>A second real order, recorded on 7 Oct 2026 (shown above): the receipt, then the confirmation after the operator accepted it.</li>
+      <li>1,112 RSpec examples, 0 failures; CI runs RuboCop, Brakeman, bundler-audit and RSpec.</li>
+    </ul>
+    <p><%= link_to "Every claim and its evidence →", "#{repo}/blob/main/docs/evidence/PORTFOLIO_CLAIMS.md" %></p>
+  </section>
+
+  <section class="home-section" aria-labelledby="explore">
+    <h2 id="explore">Explore</h2>
+    <div class="home-explore">
+      <ul class="home-links">
+        <li><%= link_to "Public menu", products_path %><span>The catalog the WhatsApp feed is built from.</span></li>
+        <li><%= link_to "Catalog feed (CSV)", catalog_feed_path %><span>The file Meta's Commerce Manager reads.</span></li>
+        <li><%= link_to "Case study", "#{repo}/blob/main/docs/portfolio/CASE_STUDY.md" %><span>The V1 to V2 story and what it proves.</span></li>
+        <li><%= link_to "Technical deep dive", "#{repo}/blob/main/docs/portfolio/TECHNICAL_DEEP_DIVE.md" %><span>Design decisions, trade-offs and tests.</span></li>
+        <li><%= link_to "Source on GitHub", repo %><span>Rails 8, PostgreSQL, Solid Queue, Kamal.</span></li>
+        <li><span class="home-private">Operator console</span><span>Private: sign-in required. Shown here with demo data.</span></li>
+      </ul>
+      <figure class="home-console">
+        <%= image_tag "home-operator-demo.jpg", width: 640, height: 360, loading: "lazy", alt: "Operator console order page with demo data: order #1 for a fictional customer, each line's customer price beside the catalog price, and the replies' sent, delivered and read times." %>
+        <figcaption>Operator console with labelled demo data (fictional customer, not a real order).</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="home-section home-limits" aria-labelledby="limits">
+    <h2 id="limits">Limits</h2>
+    <p>A production-oriented reference implementation, not a claim of production-scale operation: one test customer (the author), no uptime or volume figures, and a planned multi-week operating period that was not pursued. Catalog API push and the 24-hour window block were not verified against Meta.</p>
+  </section>
+
+  <footer class="home-footer">
+    <p>
+      <%= link_to "GitHub", repo %> ·
+      <%= link_to "Case study", "#{repo}/blob/main/docs/portfolio/CASE_STUDY.md" %> ·
+      <%= link_to "Technical deep dive", "#{repo}/blob/main/docs/portfolio/TECHNICAL_DEEP_DIVE.md" %> ·
+      <%= link_to "Claims and evidence", "#{repo}/blob/main/docs/evidence/PORTFOLIO_CLAIMS.md" %> ·
+      <%= link_to "amitsolanki.com", "https://amitsolanki.com" %>
+    </p>
+    <p class="muted">Built by Amit Solanki with AI-directed development (Claude Code).</p>
+  </footer>
+</div>

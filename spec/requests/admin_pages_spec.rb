@@ -33,7 +33,7 @@ RSpec.describe "Admin and public pages", type: :request do
   end
 
   it "renders the other admin and public pages" do
-    [ "/admin/conversations", "/admin/products", "/admin/orders/#{Order.first.id}", "/", "/products/#{product.id}" ].each do |path|
+    [ "/admin/conversations", "/admin/products", "/admin/orders/#{Order.first.id}", "/", "/products", "/products/#{product.id}" ].each do |path|
       get path
       expect(response).to have_http_status(:ok), "#{path} returned #{response.status}"
     end

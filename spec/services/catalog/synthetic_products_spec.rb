@@ -15,7 +15,7 @@ RSpec.describe "Synthetic products", type: :request do
 
   describe "the public menu" do
     it "lists real products only, and 404s a synthetic product page" do
-      get "/"
+      get "/products"
 
       expect(response.body).to include("Item MAI-006")
       expect(response.body).not_to include("Demo Soup", "Demo items")
@@ -30,7 +30,7 @@ RSpec.describe "Synthetic products", type: :request do
       Product.create!(name: "Mixed Demo", sku: "DEMO-MIX", price_cents: 100, category: real.category, synthetic: true)
       Category.create!(name: "Empty", slug: "empty", position: 50)
 
-      get "/"
+      get "/products"
 
       expect(response.body).to include("Item MAI-006", "Empty")
       expect(response.body).not_to include("Mixed Demo")

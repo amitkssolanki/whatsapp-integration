@@ -234,3 +234,68 @@ nav.admin-nav a.current { color: var(--accent); font-weight: 600; border-bottom:
   .banner-bad { background: #8f2424; }
   .btn-primary { background: #1f8a4c; }
 }
+
+/* ---- Home (public landing page) -------------------------------------- */
+/* Scoped under .home; reuses the palette above, so dark mode follows automatically. Text greens are darker (light)
+   or lighter (dark) than --accent so small text keeps a WCAG AA contrast of at least 4.5:1. */
+
+.home { max-width: 1040px; margin: 0 auto; --home-link: #16733c; --home-btn: #16733c; }
+.home h1 { font-size: clamp(1.9rem, 1.2rem + 2.6vw, 3rem); line-height: 1.12; letter-spacing: -0.02em; margin: 0.4rem 0 1rem; text-wrap: balance; }
+.home h2 { font-size: 1.3rem; margin: 0 0 0.9rem; letter-spacing: -0.01em; }
+.home h3 { font-size: 1rem; margin: 0 0 0.3rem; }
+.home code { font-size: 0.92em; padding: 0.05rem 0.3rem; border-radius: 4px; background: var(--neutral-bg); }
+.home a { color: var(--home-link); }
+
+.home-hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr); gap: 2.5rem; align-items: center; padding: 1rem 0 2.5rem; }
+.home-eyebrow { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--home-link); margin: 0; }
+.home-dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 4px var(--ok-bg); }
+.home-lede { font-size: 1.15rem; line-height: 1.55; margin: 0 0 1.4rem; max-width: 40rem; }
+.home-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0 0 1rem; }
+.home-btn { display: inline-block; padding: 0.55rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text) !important; text-decoration: none; font-weight: 600; font-size: 0.95rem; }
+.home-btn:hover { border-color: var(--accent); }
+.home-btn-primary { background: var(--home-btn); border-color: var(--home-btn); color: #fff !important; }
+.home-note { font-size: 0.85rem; color: var(--muted); margin: 0; }
+
+.home-phone { margin: 0; justify-self: center; max-width: 340px; }
+.home-phone img { display: block; width: 100%; height: auto; border-radius: 18px; border: 1px solid var(--border); box-shadow: 0 12px 32px rgba(0,0,0,0.12); }
+.home-phone figcaption, .home-console figcaption { font-size: 0.8rem; color: var(--muted); margin-top: 0.6rem; line-height: 1.4; }
+
+.home-section { border-top: 1px solid var(--border); padding: 2rem 0; }
+.home-section-lede { color: var(--muted); margin: -0.4rem 0 1rem; }
+.home-why { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.home-why p { margin: 0; }
+
+.home-pillars { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.home-pillars li { background: var(--card-bg); border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: 10px; padding: 1rem 1.1rem; }
+.home-pillars p { margin: 0; font-size: 0.92rem; color: var(--muted); }
+
+.home-checks { list-style: none; padding: 0; margin: 0 0 1rem; display: grid; gap: 0.55rem; }
+.home-checks li { position: relative; padding-left: 1.7rem; }
+.home-checks li::before { content: "✓"; position: absolute; left: 0; top: 0.05rem; width: 1.15rem; height: 1.15rem; border-radius: 50%; background: var(--ok-bg); color: var(--ok); font-size: 0.75rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+
+.home-explore { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 1.5rem; align-items: start; }
+.home-links { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.7rem; }
+.home-links li { display: grid; gap: 0.1rem; }
+.home-links a, .home-private { font-weight: 600; }
+.home-links li > span:last-child { font-size: 0.88rem; color: var(--muted); }
+.home-private { color: var(--text); }
+.home-console { margin: 0; }
+.home-console img { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--border); }
+
+.home-limits p { margin: 0; font-size: 0.92rem; color: var(--muted); max-width: 52rem; }
+.home-footer { border-top: 1px solid var(--border); padding: 1.5rem 0 0.5rem; font-size: 0.9rem; }
+.home-footer p { margin: 0 0 0.4rem; }
+
+@media (max-width: 760px) {
+  .home-hero { grid-template-columns: 1fr; gap: 1.5rem; padding-top: 0; }
+  .home-phone { max-width: 300px; }
+  .home-why, .home-explore { grid-template-columns: 1fr; }
+  .home-pillars { grid-template-columns: 1fr; }
+  .home-section { padding: 1.6rem 0; }
+}
+@media (min-width: 761px) and (max-width: 980px) {
+  .home-pillars { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-color-scheme: dark) {
+  .home { --home-link: #4cc27f; }
+}
